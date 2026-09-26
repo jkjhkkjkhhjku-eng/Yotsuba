@@ -137,6 +137,7 @@
     scrollbar-width: none;
   }
   nav.tabs::-webkit-scrollbar { display: none; }
+  #content { touch-action: pan-y; }
   .tab {
     flex: 0 0 auto;
     background: none;
@@ -1921,12 +1922,62 @@ function initTheme() {
   });
 }
 
+// ---------- Swipe between tabs ----------
+
+function initSwipeNav() {
+  var content = document.getElementById("content");
+  var startX = 0, startY = 0, tracking = false, horizontal = false;
+  var THRESHOLD = 55;
+
+  content.addEventListener("touchstart", function(e){
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+    horizontal = false;
+  }, { passive: true });
+
+  content.addEventListener("touchmove", function(e){
+    if (!tracking || e.touches.length !== 1) return;
+    var dx = e.touches[0].clientX - startX;
+    var dy = e.touches[0].clientY - startY;
+    if (!horizontal && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      horizontal = true;
+    }
+    if (horizontal && e.cancelable) e.preventDefault();
+  }, { passive: false });
+
+  function finish(endX) {
+    if (!tracking) return;
+    tracking = false;
+    if (!horizontal) return;
+    var dx = endX - startX;
+    if (Math.abs(dx) < THRESHOLD) return;
+    var idx = -1;
+    for (var i = 0; i < TABS.length; i++) { if (TABS[i].id === view.tab) { idx = i; break; } }
+    if (idx === -1) return;
+    if (dx < 0 && idx < TABS.length - 1) { view.tab = TABS[idx + 1].id; }
+    else if (dx > 0 && idx > 0) { view.tab = TABS[idx - 1].id; }
+    else return;
+    render();
+    var nav = document.getElementById("tabs");
+    var activeBtn = nav.querySelector(".tab.active");
+    if (activeBtn && activeBtn.scrollIntoView) activeBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
+
+  content.addEventListener("touchend", function(e){
+    finish(e.changedTouches[0].clientX);
+  });
+  content.addEventListener("touchcancel", function(){ tracking = false; });
+}
+
 // ---------- Init ----------
 
 load();
 initTheme();
 render();
 initSync();
+initSwipeNav();
 
 })();
 </script>
