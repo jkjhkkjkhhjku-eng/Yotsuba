@@ -1,0 +1,1934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ayanokoji Plan Tracker</title>
+<meta name="theme-color" content="#050505">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ayanokoji">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  }
+</script>
+
+<!-- Firebase (compat build, served from cdnjs). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.5/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.5/firebase-firestore-compat.min.js"></script>
+<style>
+  :root {
+    --bg: #050505;
+    --surface: #0d0d0d;
+    --surface2: #131313;
+    --border: #232323;
+    --border-strong: #363636;
+    --text: #e8e8e6;
+    --text-secondary: #8a8a86;
+    --text-muted: #55554f;
+    --accent: #8fb4c4;
+    --accent-text: #b8d4e0;
+    --success: #d7d7d2;
+    --success-text: #050505;
+    --amber: #8fb4c4;
+    --amber-text: #b8d4e0;
+    --coral: #b45a4a;
+    --radius: 2px;
+    font-synthesis: none;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #eeeeec;
+      --surface: #f8f8f6;
+      --surface2: #e6e6e2;
+      --border: #cfcfc9;
+      --border-strong: #a8a8a0;
+      --text: #101010;
+      --text-secondary: #52524c;
+      --text-muted: #86867e;
+      --accent: #35576a;
+      --accent-text: #2a4655;
+      --success: #101010;
+      --success-text: #f8f8f6;
+      --amber: #35576a;
+      --amber-text: #2a4655;
+      --coral: #8a3f30;
+    }
+  }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  :root:not([data-theme="dark"]) { color-scheme: light dark; }
+
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    -webkit-font-smoothing: antialiased;
+  }
+  #app {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+  }
+  header.top {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    background: var(--bg);
+    z-index: 10;
+    padding: 16px 16px 14px;
+    margin: -24px -16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 3px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .sub {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+  .sync-status {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-top: 5px;
+  }
+  .theme-toggle {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: 1px solid var(--border-strong);
+    border-radius: 0;
+    color: var(--text-secondary);
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  nav.tabs {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    margin-top: 16px;
+    padding-bottom: 0;
+    border-bottom: 1px solid var(--border);
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 9px 13px;
+    border-radius: 0;
+    cursor: pointer;
+    white-space: nowrap;
+    margin-bottom: -1px;
+  }
+  .tab.active {
+    background: none;
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    padding: 18px 18px;
+    margin-bottom: 12px;
+  }
+  .card h2 {
+    font-size: 11px;
+    font-weight: 600;
+    margin: 0 0 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+  }
+  .card h3 {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 16px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .card h3:first-child { margin-top: 0; }
+
+  .phase-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .phase-banner .name { font-size: 15px; font-weight: 600; letter-spacing: 0.01em; }
+  .phase-banner .range { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; letter-spacing: 0.02em; }
+  .phase-pill {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border-radius: 0;
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    flex: 0 0 auto;
+  }
+  .progress-row { margin-top: 14px; }
+  .progress-track {
+    height: 3px;
+    background: var(--surface2);
+    border-radius: 0;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 0;
+    transition: width 0.3s ease;
+  }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 7px;
+    letter-spacing: 0.02em;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+  .stat {
+    background: var(--surface);
+    border-radius: 0;
+    padding: 13px;
+  }
+  .stat .label { font-size: 10.5px; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.07em; }
+  .stat .value { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+
+  .habit-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .habit-row:last-child { border-bottom: none; }
+  .habit-check {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 0;
+    border: 1px solid var(--border-strong);
+    background: none;
+    cursor: pointer;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    font-size: 12px;
+    font-weight: 700;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .habit-check.checked {
+    background: var(--success);
+    border-color: var(--success);
+    color: var(--success-text);
+  }
+  .habit-text { flex: 1; min-width: 0; }
+  .habit-title { font-size: 13.5px; font-weight: 500; line-height: 1.4; letter-spacing: 0.005em; }
+  .habit-title.done { color: var(--text-muted); text-decoration: line-through; }
+  .habit-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .streak-badge {
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+    padding: 3px 7px;
+    border-radius: 0;
+    white-space: nowrap;
+  }
+
+  .date-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .date-nav button {
+    background: none;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    width: 28px;
+    height: 28px;
+    border-radius: 0;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .date-nav .cur { font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .date-nav .today-link {
+    font-size: 10.5px;
+    color: var(--accent-text);
+    cursor: pointer;
+    background: none;
+    border: none;
+    width: auto;
+    height: auto;
+    padding: 3px 0 0;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: block;
+  }
+
+  label.field-label {
+    display: block;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    margin: 12px 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+  label.field-label:first-child { margin-top: 0; }
+  input[type="number"], input[type="text"], input[type="date"], select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border-strong);
+    border-radius: 0;
+    color: var(--text);
+    padding: 9px 10px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--text);
+    color: var(--bg);
+    border: 1px solid var(--text);
+    border-radius: 0;
+    padding: 10px 16px;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    margin-top: 14px;
+    width: 100%;
+  }
+  .btn:active { opacity: 0.8; }
+  .btn.secondary {
+    background: none;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+  }
+
+  .metric-select-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-bottom: 6px;
+  }
+  .metric-pick {
+    background: var(--surface);
+    border: none;
+    border-radius: 0;
+    padding: 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    color: var(--text-muted);
+  }
+  .metric-pick.active {
+    color: var(--text);
+    background: var(--surface2);
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  .cal-dow-cell {
+    text-align: center;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: 4px;
+  }
+  .cal-cell {
+    aspect-ratio: 1;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .cal-cell.empty { border: none; }
+  .cal-cell.today { border-color: var(--accent-text); border-width: 2px; }
+  .cal-day-num { font-size: 10.5px; color: var(--text); }
+
+  .month-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .month-cell {
+    border: 1px solid var(--border);
+    padding: 12px 6px;
+    text-align: center;
+    cursor: pointer;
+  }
+  .month-cell.current { border-color: var(--accent-text); border-width: 2px; }
+  .month-cell-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+  .month-cell-pct { font-size: 15px; font-weight: 700; }
+
+  .log-list { margin-top: 4px; }
+  .log-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13.5px;
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry .d { color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .log-entry .v { font-weight: 600; }
+  .log-entry .del {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 6px;
+  }
+
+  svg.chart { width: 100%; height: 140px; overflow: visible; }
+  .chart-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 24px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .empty-note {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 10px 0 2px;
+  }
+
+  .phase-list-item {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .phase-list-item:last-child { border-bottom: none; }
+  .phase-list-item .ph-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .phase-list-item .ph-name { font-size: 13.5px; font-weight: 600; letter-spacing: 0.01em; }
+  .phase-list-item .ph-range { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .phase-list-item ul { margin: 4px 0 0; padding-left: 16px; }
+  .phase-list-item li { font-size: 12.5px; color: var(--text-secondary); line-height: 1.7; }
+
+  .resource-item {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13.5px;
+  }
+  .resource-item:last-child { border-bottom: none; }
+  .resource-item .r-title { font-weight: 500; }
+  .resource-item .r-note { font-size: 11px; color: var(--text-muted); margin-top: 2px; letter-spacing: 0.01em; }
+  .resource-item.clickable { cursor: pointer; }
+  .resource-item.clickable:hover .r-title { color: var(--accent-text); }
+  .resource-item .r-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .resource-item .r-arrow { color: var(--text-muted); font-size: 13px; flex: 0 0 auto; }
+  .resource-item.clickable:hover .r-arrow { color: var(--accent-text); }
+
+  .add-resource-btn {
+    width: 100%;
+    background: none;
+    border: 1px dashed var(--border-strong);
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 11px;
+    cursor: pointer;
+    margin-top: 12px;
+    border-radius: 0;
+  }
+  .add-resource-btn:hover { color: var(--text); border-color: var(--text-secondary); }
+
+  #toast {
+    position: fixed;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--text);
+    border: 1px solid var(--text);
+    color: var(--bg);
+    padding: 10px 18px;
+    border-radius: 0;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 50;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">◐</button>
+    <h1>Ayanokoji plan</h1>
+    <div class="sub">Cognitive · social · emotional · physical</div>
+    <div class="sync-status" id="syncStatus">● Local only</div>
+    <nav class="tabs" id="tabs"></nav>
+  </header>
+  <main id="content"></main>
+</div>
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+// ---------- Data model ----------
+
+var PLAN_START = "2026-10-01"; // Phase 1 start per the plan
+
+var PHASES = [
+  {
+    id: "p1",
+    name: "Phase 1 — Foundation",
+    start: "2026-10-01",
+    days: 90,
+    focus: [
+      "Cognitive drills (puzzles, programming)",
+      "Memory training (Anki daily)",
+      "Focus training (daily meditation)",
+      "Strength training (basic, 3x/week)",
+      "Mindfulness / journaling"
+    ]
+  },
+  {
+    id: "p2",
+    name: "Phase 2 — Growth",
+    start: "2027-01-01",
+    days: 90,
+    focus: [
+      "Advanced strategy and analysis",
+      "Increased memory load (mnemonics)",
+      "Martial arts (intermediate)",
+      "Stress inoculation drills (intervals)"
+    ]
+  },
+  {
+    id: "p3",
+    name: "Phase 3 — Mastery",
+    start: "2027-04-01",
+    days: 180,
+    focus: [
+      "Complex projects / competitions",
+      "Long-term memory challenges",
+      "Advanced combat / sparring",
+      "High-stress simulations (exams, public speaking)"
+    ]
+  }
+];
+
+// Daily habit checklist — drawn from the plan's "Habits" column
+var HABITS = [
+  { id: "puzzle", title: "Solve a logic puzzle, chess problem, or coding challenge", trait: "Analytical intelligence" },
+  { id: "anki", title: "Flashcard review (spaced repetition)", trait: "Working memory" },
+  { id: "meditate", title: "10–20 min focused-attention meditation", trait: "Focused attention" },
+  { id: "pomodoro", title: "At least one distraction-free focus sprint", trait: "Focused attention" },
+  { id: "strategy", title: "Strategic thinking — plan, review goals, or play a strategy game", trait: "Strategic thinking" },
+  { id: "journal", title: "Journal mood / triggers, or a gratitude note", trait: "Emotional regulation" },
+  { id: "observe", title: "Consciously observe one social interaction, reflect on cues", trait: "Empathy / observation" },
+  { id: "training", title: "Strength, cardio, or martial arts session", trait: "Physical fitness" }
+];
+
+// Metrics — drawn from the plan's "Metrics" column
+var METRICS = [
+  { id: "lift", label: "Key lift (1RM)", unit: "kg", color: "coral" },
+  { id: "focus_min", label: "Longest focus span", unit: "min", color: "accent" },
+  { id: "recall", label: "Flashcard retention", unit: "%", color: "success" },
+  { id: "run5k", label: "5K run time", unit: "min", color: "amber" },
+  { id: "resilience", label: "Resilience self-rating", unit: "/10", color: "coral" },
+  { id: "pushups", label: "Max push-ups", unit: "reps", color: "success" }
+];
+
+var RESOURCES = [
+  { title: "Make It Stick — Brown, Roediger, McDaniel", note: "Evidence-based learning: spacing, retrieval practice" },
+  { title: "Moonwalking with Einstein — Joshua Foer", note: "Memory palaces and mnemonics" },
+  { title: "Deep Work — Cal Newport", note: "Building focus in a distracted world" },
+  { title: "Emotional Intelligence — Daniel Goleman", note: "Self-awareness and regulation" },
+  { title: "Quiet — Susan Cain", note: "Observant, reserved personalities" },
+  { title: "Anki", note: "Spaced-repetition flashcards" },
+  { title: "Headspace / Insight Timer", note: "Guided meditation, streak tracking" },
+  { title: "StrongLifts 5x5", note: "Progressive strength training log" },
+  { title: "Learning How to Learn — Coursera", note: "Spaced repetition, chunking" }
+];
+
+// ---------- Private Points config ----------
+// Edit these defaults to change how Private Points are earned/spent app-wide.
+// The in-app "Points" tab also lets you tweak most of this at runtime — those
+// edits are saved and take priority over the code defaults below.
+// Balance a brand-new user starts with, before any habits/missions are logged.
+var STARTING_BALANCE = 3200;
+
+// Defaults below are just a starting point — tune however you like.
+var POINTS_CONFIG_DEFAULT = {
+  habitPoints: 10,            // points awarded per habit completion (unless overridden below)
+  habitOverrides: {},        // e.g. { training: 15 } — award a different amount for a specific habit
+  streakBonusEvery: 7,       // award a bonus every N consecutive days of a habit streak (0 = off)
+  streakBonusAmount: 50,     // bonus points awarded at each streak milestone
+  missionPointsDefault: 15,  // default points suggested when adding a new mission
+  metricLogPoints: 0         // points awarded per metric entry logged (0 = disabled)
+};
+
+// Starter Private Points "shop". This is a placeholder for a future rewards
+// feature — extend this array in code, or use the Points tab to add rewards
+// at runtime (saved to state.rewards).
+var REWARDS_DEFAULT = [
+  { id: "r_break", title: "Guilt-free hour off", cost: 30, note: "Skip today's checklist, no streak penalty" },
+  { id: "r_treat", title: "Street food / snack", cost: 50, note: "Something small, same-day spend" },
+  { id: "r_splurge", title: "Bigger splurge", cost: 400, note: "Save up over several days for this one" }
+];
+
+// ---------- Storage ----------
+
+var STORE_KEY = "ayanokoji_tracker_v1";
+var state = {
+  habits: {}, metrics: {}, theme: null, myBooks: [],
+  points: { balance: 0, transactions: [] },
+  pointsConfig: null,
+  missions: [],
+  rewards: []
+};
+
+// Apply a full state object (from localStorage or the online database) onto
+// the live `state`, filling in defaults for anything missing.
+function applyState(data) {
+  if (!data) return;
+  state.habits = data.habits || {};
+  state.metrics = data.metrics || {};
+  state.theme = data.theme || null;
+  state.myBooks = data.myBooks || [];
+  state.points = data.points || { balance: 0, transactions: [] };
+  state.missions = data.missions || [];
+  state.rewards = data.rewards || [];
+  var savedCfg = data.pointsConfig || {};
+  state.pointsConfig = Object.assign({}, POINTS_CONFIG_DEFAULT, savedCfg, {
+    habitOverrides: Object.assign({}, POINTS_CONFIG_DEFAULT.habitOverrides, savedCfg.habitOverrides || {})
+  });
+  METRICS.forEach(function(m) { if (!state.metrics[m.id]) state.metrics[m.id] = []; });
+}
+
+function load() {
+  var isFirstRun = !localStorage.getItem(STORE_KEY);
+  try {
+    var raw = localStorage.getItem(STORE_KEY);
+    if (raw) applyState(JSON.parse(raw));
+  } catch (e) { /* start fresh */ }
+  METRICS.forEach(function(m) { if (!state.metrics[m.id]) state.metrics[m.id] = []; });
+  if (!state.pointsConfig) state.pointsConfig = Object.assign({}, POINTS_CONFIG_DEFAULT, { habitOverrides: {} });
+  if (isFirstRun) {
+    state.myBooks.push({ title: "The 48 Laws of Power — Robert Greene" });
+    if (STARTING_BALANCE) {
+      state.points.balance = STARTING_BALANCE;
+      state.points.transactions.push({ id: uid(), date: todayStr(), ts: Date.now(), amount: STARTING_BALANCE, reason: "Starting balance" });
+    }
+  }
+}
+
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  catch (e) { showToast("Could not save — storage unavailable"); }
+  scheduleDbSave();
+}
+
+// ---------- Manual backup (independent of both localStorage and the db sync) ----------
+
+function backupFilename() {
+  var d = new Date();
+  var stamp = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  return "ayanokoji-tracker-backup-" + stamp + ".json";
+}
+
+function backupPayload() {
+  var snapshot = JSON.parse(JSON.stringify(state));
+  return JSON.stringify({ exportedAt: new Date().toISOString(), state: snapshot }, null, 2);
+}
+
+function plainDownload(filename, payload) {
+  try {
+    var blob = new Blob([payload], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    showToast("Backup downloaded");
+  } catch (e) {
+    showToast("Couldn't start the download");
+  }
+}
+
+function exportBackup() {
+  var filename = backupFilename();
+  var payload = backupPayload();
+  if (window.claude && typeof window.claude.use === "function") {
+    window.claude.use("downloads").then(function(downloads){
+      if (!downloads) { plainDownload(filename, payload); return; }
+      downloads.save({ filename: filename, data: payload }).then(function(){
+        showToast("Backup downloaded");
+      }).catch(function(){ showToast("Download was cancelled or failed"); });
+    }).catch(function(){ plainDownload(filename, payload); });
+  } else {
+    plainDownload(filename, payload);
+  }
+}
+
+function importBackupFile(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(){
+    try {
+      var parsed = JSON.parse(reader.result);
+      var data = parsed && parsed.state ? parsed.state : parsed; // accept raw state too
+      if (!data || typeof data !== "object") throw new Error("bad file");
+      applyState(data);
+      save();
+      render();
+      showToast("Backup restored");
+    } catch (e) {
+      showToast("Couldn't read that file — is it a tracker backup?");
+    }
+  };
+  reader.onerror = function(){ showToast("Couldn't read that file"); };
+  reader.readAsText(file);
+}
+
+// ---------- Online sync ----------
+// localStorage above is the fast, always-available cache. On top of that,
+// state is mirrored to ONE online document so it follows you across devices.
+// Two possible backends, tried in this order:
+//   1. Firebase Firestore — your own project, works anywhere (local file,
+//      any host, an APK wrapper). Activates once FIREBASE_CONFIG is filled in.
+//   2. Claude Artifact "db" capability — only works when opened as this
+//      hosted claude.ai page. Used automatically as a fallback until you
+//      set up Firebase.
+// Both expose the same doc.get()/.set()/.onSnapshot() shape, so the same
+// save/subscribe logic below works for either one unchanged.
+
+// ---- Fill these in from your OWN Firebase project to switch sync to it ----
+// Firebase console (console.firebase.google.com) -> Project settings ->
+// General -> "Your apps" -> Web app (</>) -> copy the firebaseConfig object.
+var FIREBASE_CONFIG = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+// Any path you like — this is the ONE document every device reads/writes.
+// Pick your own long random id and use the exact same one in your Firestore
+// security rule (see setup notes). Anyone who has your config AND this exact
+// path can read/write this doc, so keep it unguessable and don't reuse this
+// pattern for anything sensitive.
+var FIREBASE_DOC_PATH = "trackers/roof76c8o8m92kq06xq7vr9ije8u";
+
+function firebaseConfigured() {
+  return !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf("YOUR_") !== 0
+    && FIREBASE_DOC_PATH.indexOf("REPLACE-WITH") === -1);
+}
+
+function initFirebaseSync() {
+  try {
+    if (typeof firebase === "undefined" || !firebase.initializeApp) { setSyncStatus("offline"); return; }
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    var ref = firebase.firestore().doc(FIREBASE_DOC_PATH);
+    ref.get().then(function(snap){
+      dbDoc = ref;
+      if (snap.exists && snap.data()) {
+        applyingRemote = true;
+        applyState(snap.data());
+        applyingRemote = false;
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+        render();
+      } else {
+        flushDbSave(); // seed the online doc with what we have locally
+      }
+      subscribeDb();
+      setSyncStatus("online");
+    }).catch(function(){ setSyncStatus("error"); });
+  } catch (e) {
+    setSyncStatus("offline");
+  }
+}
+
+function initSync() {
+  if (firebaseConfigured()) { initFirebaseSync(); return; }
+  initDb(); // falls back to the Claude Artifact "db" capability, if any
+}
+
+var dbDoc = null;
+var dbSaveTimer = null;
+var dbWriteInProgress = false;
+var dbWritePending = false;
+var applyingRemote = false;
+
+function setSyncStatus(status) {
+  var elm = document.getElementById("syncStatus");
+  if (!elm) return;
+  if (status === "online") { elm.textContent = "● Synced online"; elm.style.color = "var(--success)"; }
+  else if (status === "error") { elm.textContent = "● Sync error — saving locally"; elm.style.color = "var(--coral)"; }
+  else { elm.textContent = "● Local only"; elm.style.color = "var(--text-muted)"; }
+}
+
+function scheduleDbSave() {
+  if (!dbDoc || applyingRemote) return;
+  clearTimeout(dbSaveTimer);
+  dbSaveTimer = setTimeout(flushDbSave, 500);
+}
+
+function flushDbSave() {
+  if (!dbDoc) return;
+  if (dbWriteInProgress) { dbWritePending = true; return; }
+  dbWriteInProgress = true;
+  var snapshot = JSON.parse(JSON.stringify(state));
+  dbDoc.set(snapshot).then(function(){
+    dbWriteInProgress = false;
+    setSyncStatus("online");
+    if (dbWritePending) { dbWritePending = false; flushDbSave(); }
+  }).catch(function(){
+    dbWriteInProgress = false;
+    setSyncStatus("error");
+    if (dbWritePending) { dbWritePending = false; flushDbSave(); }
+  });
+}
+
+function subscribeDb() {
+  if (!dbDoc) return;
+  dbDoc.onSnapshot(function(snap){
+    if (!snap.exists) return;
+    if (snap.metadata.hasPendingWrites) return; // this is our own write echoing back
+    applyingRemote = true;
+    applyState(snap.data());
+    applyingRemote = false;
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+    render();
+  }, function(){
+    setSyncStatus("error");
+  });
+}
+
+function initDb() {
+  if (!window.claude || typeof window.claude.use !== "function") { setSyncStatus("offline"); return; }
+  window.claude.use("db").then(function(db){
+    if (!db) { setSyncStatus("offline"); return; }
+    var ref = db.doc("app/state");
+    ref.get().then(function(snap){
+      dbDoc = ref;
+      if (snap.exists && snap.data()) {
+        applyingRemote = true;
+        applyState(snap.data());
+        applyingRemote = false;
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+        render();
+      } else {
+        flushDbSave(); // seed the online doc with what we have locally
+      }
+      subscribeDb();
+      setSyncStatus("online");
+    }).catch(function(){ setSyncStatus("error"); });
+  }).catch(function(){ setSyncStatus("offline"); });
+}
+
+// ---------- Private Points engine ----------
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+function pointsCfg() { return state.pointsConfig; }
+
+function habitPointsFor(habitId) {
+  var cfg = pointsCfg();
+  var override = cfg.habitOverrides[habitId];
+  return (typeof override === "number" && !isNaN(override)) ? override : cfg.habitPoints;
+}
+
+// amount can be positive (earn) or negative (spend/reverse)
+function recordPoints(amount, reason) {
+  if (!amount) return;
+  state.points.balance = Math.max(0, state.points.balance + amount);
+  state.points.transactions.push({ id: uid(), date: todayStr(), ts: Date.now(), amount: amount, reason: reason });
+  save();
+}
+
+function spendPoints(amount, reason) {
+  if (amount <= 0) return true;
+  if (state.points.balance < amount) return false;
+  recordPoints(-amount, reason);
+  return true;
+}
+
+// ---------- Utilities ----------
+
+function pad(n) { return n < 10 ? "0" + n : "" + n; }
+function fmtDate(d) { return d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate()); }
+function parseDate(s) { var p = s.split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+function todayStr() { return fmtDate(new Date()); }
+function addDays(dateStr, n) { var d = parseDate(dateStr); d.setDate(d.getDate()+n); return fmtDate(d); }
+function daysBetween(a, b) { return Math.round((parseDate(b) - parseDate(a)) / 86400000); }
+function prettyDate(s) {
+  var d = parseDate(s);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+function shortDate(s) {
+  var d = parseDate(s);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+function showToast(msg) {
+  var t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(showToast._tm);
+  showToast._tm = setTimeout(function(){ t.classList.remove("show"); }, 1600);
+}
+
+function currentPhase() {
+  var today = todayStr();
+  for (var i = 0; i < PHASES.length; i++) {
+    var p = PHASES[i];
+    var end = addDays(p.start, p.days);
+    if (today < p.start) return { phase: p, index: i, status: "upcoming" };
+    if (today >= p.start && today < end) return { phase: p, index: i, status: "active" };
+  }
+  return { phase: PHASES[PHASES.length - 1], index: PHASES.length - 1, status: "complete" };
+}
+
+function habitsForDate(dateStr) {
+  if (!state.habits[dateStr]) state.habits[dateStr] = {};
+  return state.habits[dateStr];
+}
+
+function habitStreak(habitId) {
+  var streak = 0;
+  var d = todayStr();
+  // if today not done yet, start counting from yesterday
+  var todayDone = state.habits[d] && state.habits[d][habitId];
+  if (!todayDone) d = addDays(d, -1);
+  while (state.habits[d] && state.habits[d][habitId]) {
+    streak++;
+    d = addDays(d, -1);
+  }
+  return streak;
+}
+
+function completionRate(dateStr) {
+  var rec = state.habits[dateStr] || {};
+  var done = HABITS.filter(function(h){ return rec[h.id]; }).length;
+  return { done: done, total: HABITS.length };
+}
+
+function shiftMonth(ym, delta) {
+  var y = +ym.slice(0, 4), m = +ym.slice(5, 7);
+  m += delta;
+  while (m < 1) { m += 12; y--; }
+  while (m > 12) { m -= 12; y++; }
+  return y + "-" + pad(m);
+}
+
+// Habit + points stats over an inclusive date range, for the Progress tab
+function statsForRange(startStr, endStr) {
+  var daysLogged = 0, totalChecks = 0, daysWithData = 0, sumRate = 0;
+  Object.keys(state.habits).forEach(function(d) {
+    if (d < startStr || d > endStr) return;
+    var rec = state.habits[d];
+    var done = HABITS.filter(function(h) { return rec[h.id]; }).length;
+    if (done > 0) daysLogged++;
+    totalChecks += done;
+    daysWithData++;
+    sumRate += done / HABITS.length;
+  });
+  var netPoints = 0, earnedPoints = 0, spentPoints = 0;
+  state.points.transactions.forEach(function(t) {
+    if (t.date < startStr || t.date > endStr) return;
+    netPoints += t.amount;
+    if (t.amount > 0) earnedPoints += t.amount; else spentPoints += -t.amount;
+  });
+  return {
+    daysLogged: daysLogged, totalChecks: totalChecks, daysWithData: daysWithData,
+    avgRate: daysWithData ? sumRate / daysWithData : 0,
+    netPoints: netPoints, earnedPoints: earnedPoints, spentPoints: spentPoints
+  };
+}
+
+function overallStats() {
+  var totalDaysLogged = Object.keys(state.habits).filter(function(d){
+    return Object.values(state.habits[d]).some(Boolean);
+  }).length;
+  var totalChecks = 0;
+  Object.keys(state.habits).forEach(function(d){
+    HABITS.forEach(function(h){ if (state.habits[d][h.id]) totalChecks++; });
+  });
+  var bestStreak = 0;
+  HABITS.forEach(function(h){
+    var s = habitStreak(h.id);
+    if (s > bestStreak) bestStreak = s;
+  });
+  return { totalDaysLogged: totalDaysLogged, totalChecks: totalChecks, bestStreak: bestStreak };
+}
+
+// ---------- View state ----------
+
+var view = {
+  tab: "today", selectedDate: todayStr(), selectedMetric: METRICS[0].id,
+  progressMode: "month", progressMonth: todayStr().slice(0, 7), progressYear: todayStr().slice(0, 4)
+};
+
+var TABS = [
+  { id: "today", label: "Today" },
+  { id: "phases", label: "Phases" },
+  { id: "metrics", label: "Metrics" },
+  { id: "progress", label: "Progress" },
+  { id: "points", label: "Points" },
+  { id: "resources", label: "Resources" }
+];
+
+// ---------- Rendering ----------
+
+function el(tag, attrs, children) {
+  var e = document.createElement(tag);
+  if (attrs) Object.keys(attrs).forEach(function(k){
+    if (k === "class") e.className = attrs[k];
+    else if (k === "html") e.innerHTML = attrs[k];
+    else if (k.indexOf("on") === 0 && typeof attrs[k] === "function") e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  });
+  if (children) children.forEach(function(c){ if (c) e.appendChild(c); });
+  return e;
+}
+function text(s) { return document.createTextNode(s); }
+
+function renderTabs() {
+  var nav = document.getElementById("tabs");
+  nav.innerHTML = "";
+  TABS.forEach(function(t){
+    var b = el("button", {
+      class: "tab" + (view.tab === t.id ? " active" : ""),
+      onclick: function(){ view.tab = t.id; render(); }
+    }, [text(t.label)]);
+    nav.appendChild(b);
+  });
+}
+
+function renderToday() {
+  var frag = document.createDocumentFragment();
+  var cp = currentPhase();
+  var stats = overallStats();
+
+  // Phase banner
+  var end = addDays(cp.phase.start, cp.phase.days);
+  var dayNum = Math.max(1, Math.min(cp.phase.days, daysBetween(cp.phase.start, todayStr()) + 1));
+  var pct = cp.status === "upcoming" ? 0 : cp.status === "complete" ? 100 : Math.round((dayNum / cp.phase.days) * 100);
+
+  var banner = el("div", { class: "card" }, [
+    el("div", { class: "phase-banner" }, [
+      el("div", {}, [
+        el("div", { class: "name" }, [text(cp.phase.name)]),
+        el("div", { class: "range" }, [text(
+          cp.status === "upcoming" ? "Starts " + shortDate(cp.phase.start) :
+          cp.status === "complete" ? "Plan complete" :
+          "Day " + dayNum + " of " + cp.phase.days
+        )])
+      ]),
+      el("div", { class: "phase-pill" }, [text(cp.status === "active" ? "In progress" : cp.status === "upcoming" ? "Upcoming" : "Complete")])
+    ]),
+    el("div", { class: "progress-row" }, [
+      el("div", { class: "progress-track" }, [
+        el("div", { class: "progress-fill", style: "width:" + pct + "%" })
+      ]),
+      el("div", { class: "progress-label" }, [text(pct + "% through this phase"), text(shortDate(end))])
+    ])
+  ]);
+  frag.appendChild(banner);
+
+  // Overview stats
+  var statsCard = el("card", null, null);
+  statsCard = el("div", { class: "card" }, [
+    el("div", { class: "stat-grid" }, [
+      el("div", { class: "stat" }, [
+        el("div", { class: "label" }, [text("Best streak")]),
+        el("div", { class: "value" }, [text(stats.bestStreak + "d")])
+      ]),
+      el("div", { class: "stat" }, [
+        el("div", { class: "label" }, [text("Days logged")]),
+        el("div", { class: "value" }, [text("" + stats.totalDaysLogged)])
+      ]),
+      el("div", { class: "stat" }, [
+        el("div", { class: "label" }, [text("Total check-ins")]),
+        el("div", { class: "value" }, [text("" + stats.totalChecks)])
+      ]),
+      el("div", { class: "stat" }, [
+        el("div", { class: "label" }, [text("Private Points")]),
+        el("div", { class: "value" }, [text("" + state.points.balance)])
+      ])
+    ])
+  ]);
+  frag.appendChild(statsCard);
+
+  // Date nav + habit checklist
+  var rec = completionRate(view.selectedDate);
+  var checklistCard = el("div", { class: "card" });
+  var dateNav = el("div", { class: "date-nav" }, [
+    el("button", { onclick: function(){ view.selectedDate = addDays(view.selectedDate, -1); render(); }, "aria-label": "Previous day" }, [text("‹")]),
+    el("div", {}, [
+      el("div", { class: "cur" }, [text(prettyDate(view.selectedDate))]),
+      view.selectedDate !== todayStr() ? el("button", { class: "today-link", onclick: function(){ view.selectedDate = todayStr(); render(); } }, [text("Jump to today")]) : text("")
+    ]),
+    el("button", {
+      onclick: function(){
+        var next = addDays(view.selectedDate, 1);
+        if (next <= todayStr()) { view.selectedDate = next; render(); }
+      },
+      "aria-label": "Next day",
+      style: view.selectedDate >= todayStr() ? "opacity:0.3;cursor:default" : ""
+    }, [text("›")])
+  ]);
+  checklistCard.appendChild(dateNav);
+  checklistCard.appendChild(el("h2", { style: "margin-top:14px" }, [text(rec.done + " of " + rec.total + " habits done")]));
+
+  HABITS.forEach(function(h){
+    var dayRec = habitsForDate(view.selectedDate);
+    var checked = !!dayRec[h.id];
+    var streak = habitStreak(h.id);
+    var row = el("div", { class: "habit-row" }, [
+      el("button", {
+        class: "habit-check" + (checked ? " checked" : ""),
+        "aria-label": (checked ? "Mark incomplete: " : "Mark complete: ") + h.title,
+        onclick: function(){
+          var d = habitsForDate(view.selectedDate);
+          d[h.id] = !d[h.id];
+          save();
+          if (d[h.id]) {
+            recordPoints(habitPointsFor(h.id), "Completed: " + h.title);
+            var s = habitStreak(h.id);
+            var cfg = pointsCfg();
+            if (cfg.streakBonusEvery > 0 && s > 0 && s % cfg.streakBonusEvery === 0) {
+              recordPoints(cfg.streakBonusAmount, "Streak bonus: " + h.title + " (" + s + "d)");
+              showToast("+" + habitPointsFor(h.id) + " pts, +" + cfg.streakBonusAmount + " streak bonus");
+            } else {
+              showToast("+" + habitPointsFor(h.id) + " Private Points");
+            }
+          } else {
+            recordPoints(-habitPointsFor(h.id), "Reversed: " + h.title);
+          }
+          render();
+        }
+      }, [text("✓")]),
+      el("div", { class: "habit-text" }, [
+        el("div", { class: "habit-title" + (checked ? " done" : "") }, [text(h.title)]),
+        el("div", { class: "habit-meta" }, [text(h.trait)])
+      ]),
+      streak > 1 ? el("div", { class: "streak-badge" }, [text(streak + "d streak")]) : text("")
+    ]);
+    checklistCard.appendChild(row);
+  });
+  frag.appendChild(checklistCard);
+
+  // ---- Missions: one-off tasks worth Private Points ----
+  var missionsCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Missions")])
+  ]);
+  var openMissions = state.missions.filter(function(m){ return !m.done; });
+  var doneMissions = state.missions.filter(function(m){ return m.done; });
+  if (state.missions.length === 0) {
+    missionsCard.appendChild(el("div", { class: "empty-note" }, [text("No missions yet — add a one-off task below")]));
+  }
+  openMissions.concat(doneMissions).forEach(function(m){
+    var row = el("div", { class: "habit-row" }, [
+      el("button", {
+        class: "habit-check" + (m.done ? " checked" : ""),
+        "aria-label": (m.done ? "Mark incomplete: " : "Mark complete: ") + m.title,
+        onclick: function(){
+          m.done = !m.done;
+          if (m.done) {
+            recordPoints(m.points, "Mission: " + m.title);
+            showToast("+" + m.points + " Private Points");
+          } else {
+            recordPoints(-m.points, "Reversed mission: " + m.title);
+          }
+          save();
+          render();
+        }
+      }, [text("✓")]),
+      el("div", { class: "habit-text" }, [
+        el("div", { class: "habit-title" + (m.done ? " done" : "") }, [text(m.title)]),
+        el("div", { class: "habit-meta" }, [text(m.points + " pts")])
+      ]),
+      el("button", {
+        class: "log-entry del", style: "padding:0;border:none",
+        "aria-label": "Delete mission",
+        onclick: function(){
+          state.missions = state.missions.filter(function(x){ return x !== m; });
+          save();
+          render();
+        }
+      }, [text("×")])
+    ]);
+    missionsCard.appendChild(row);
+  });
+
+  var mTitle = el("input", { type: "text", placeholder: "Mission title" });
+  var mPoints = el("input", { type: "number", step: "1", min: "0", value: String(pointsCfg().missionPointsDefault) });
+  missionsCard.appendChild(el("label", { class: "field-label" }, [text("New mission")]));
+  missionsCard.appendChild(mTitle);
+  missionsCard.appendChild(el("label", { class: "field-label" }, [text("Points")]));
+  missionsCard.appendChild(mPoints);
+  var addMissionBtn = el("button", { class: "btn secondary", type: "button" }, [text("Add mission")]);
+  addMissionBtn.addEventListener("click", function(){
+    var title = mTitle.value.trim();
+    var pts = parseInt(mPoints.value, 10);
+    if (!title) { showToast("Enter a mission title first"); return; }
+    if (isNaN(pts) || pts < 0) pts = pointsCfg().missionPointsDefault;
+    state.missions.push({ id: uid(), title: title, points: pts, done: false });
+    save();
+    render();
+  });
+  missionsCard.appendChild(addMissionBtn);
+  frag.appendChild(missionsCard);
+
+  return frag;
+}
+
+function renderPhases() {
+  var frag = document.createDocumentFragment();
+  var card = el("div", { class: "card" }, [
+    el("h2", {}, [text("Multi-phase plan")])
+  ]);
+  var cp = currentPhase();
+  PHASES.forEach(function(p, i){
+    var end = addDays(p.start, p.days);
+    var status = i < cp.index ? "Complete" : i === cp.index ? (cp.status === "upcoming" ? "Upcoming" : "In progress") : "Upcoming";
+    var item = el("div", { class: "phase-list-item" }, [
+      el("div", { class: "ph-head" }, [
+        el("div", { class: "ph-name" }, [text(p.name)]),
+        el("div", { class: "ph-range" }, [text(shortDate(p.start) + " – " + shortDate(end) + " · " + status)])
+      ]),
+      el("ul", {}, p.focus.map(function(f){ return el("li", {}, [text(f)]); }))
+    ]);
+    card.appendChild(item);
+  });
+  frag.appendChild(card);
+
+  var milestoneCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Milestones")]),
+    el("ul", { style: "margin:0;padding-left:18px;font-size:13.5px;color:var(--text-secondary);line-height:1.8" }, [
+      "Solve a set number of chess puzzles daily by end of Phase 1",
+      "Memorize a 20-item list with 90% recall",
+      "90 seconds of uninterrupted focus, building upward",
+      "Lift +20% on key exercises",
+      "Pass a martial arts belt test",
+      "Quarterly cognitive test (e.g. Raven's matrices)"
+    ].map(function(m){ return el("li", {}, [text(m)]); }))
+  ]);
+  frag.appendChild(milestoneCard);
+
+  return frag;
+}
+
+function renderChart(metricId) {
+  var entries = (state.metrics[metricId] || []).slice().sort(function(a,b){ return a.date < b.date ? -1 : 1; });
+  var wrap = document.createElement("div");
+  if (entries.length < 2) {
+    wrap.appendChild(el("div", { class: "chart-empty" }, [text(entries.length === 0 ? "No entries yet — log your first below" : "Log one more entry to see a trend")]));
+    return wrap;
+  }
+  var w = 640, h = 140, padL = 34, padR = 10, padT = 14, padB = 22;
+  var vals = entries.map(function(e){ return e.value; });
+  var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+  if (min === max) { min -= 1; max += 1; }
+  var xStep = (w - padL - padR) / (entries.length - 1);
+  function xAt(i){ return padL + i * xStep; }
+  function yAt(v){ return padT + (1 - (v - min) / (max - min)) * (h - padT - padB); }
+
+  var pts = entries.map(function(e,i){ return xAt(i) + "," + yAt(e.value); }).join(" ");
+
+  var svgNS = "http://www.w3.org/2000/svg";
+  var svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+  svg.setAttribute("class", "chart");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+  var accentVar = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#7f77dd";
+
+  // gridlines
+  [0, 0.5, 1].forEach(function(f){
+    var y = padT + f * (h - padT - padB);
+    var line = document.createElementNS(svgNS, "line");
+    line.setAttribute("x1", padL); line.setAttribute("x2", w - padR);
+    line.setAttribute("y1", y); line.setAttribute("y2", y);
+    line.setAttribute("stroke", "currentColor");
+    line.setAttribute("stroke-opacity", "0.12");
+    line.setAttribute("stroke-width", "1");
+    svg.appendChild(line);
+  });
+
+  var labelMax = document.createElementNS(svgNS, "text");
+  labelMax.setAttribute("x", 2); labelMax.setAttribute("y", padT + 4);
+  labelMax.setAttribute("font-size", "10"); labelMax.setAttribute("fill", "currentColor"); labelMax.setAttribute("opacity", "0.5");
+  labelMax.textContent = Math.round(max * 10) / 10;
+  svg.appendChild(labelMax);
+  var labelMin = document.createElementNS(svgNS, "text");
+  labelMin.setAttribute("x", 2); labelMin.setAttribute("y", h - padB + 4);
+  labelMin.setAttribute("font-size", "10"); labelMin.setAttribute("fill", "currentColor"); labelMin.setAttribute("opacity", "0.5");
+  labelMin.textContent = Math.round(min * 10) / 10;
+  svg.appendChild(labelMin);
+
+  var poly = document.createElementNS(svgNS, "polyline");
+  poly.setAttribute("points", pts);
+  poly.setAttribute("fill", "none");
+  poly.setAttribute("stroke", accentVar);
+  poly.setAttribute("stroke-width", "2");
+  poly.setAttribute("stroke-linejoin", "round");
+  poly.setAttribute("stroke-linecap", "round");
+  svg.appendChild(poly);
+
+  entries.forEach(function(e, i){
+    var c = document.createElementNS(svgNS, "circle");
+    c.setAttribute("cx", xAt(i)); c.setAttribute("cy", yAt(e.value));
+    c.setAttribute("r", "3"); c.setAttribute("fill", accentVar);
+    svg.appendChild(c);
+  });
+
+  // first/last date labels
+  var dFirst = document.createElementNS(svgNS, "text");
+  dFirst.setAttribute("x", padL); dFirst.setAttribute("y", h - 4);
+  dFirst.setAttribute("font-size", "10"); dFirst.setAttribute("fill", "currentColor"); dFirst.setAttribute("opacity", "0.5");
+  dFirst.textContent = shortDate(entries[0].date);
+  svg.appendChild(dFirst);
+  var dLast = document.createElementNS(svgNS, "text");
+  dLast.setAttribute("x", w - padR); dLast.setAttribute("y", h - 4);
+  dLast.setAttribute("text-anchor", "end");
+  dLast.setAttribute("font-size", "10"); dLast.setAttribute("fill", "currentColor"); dLast.setAttribute("opacity", "0.5");
+  dLast.textContent = shortDate(entries[entries.length-1].date);
+  svg.appendChild(dLast);
+
+  wrap.appendChild(svg);
+  return wrap;
+}
+
+function renderMetrics() {
+  var frag = document.createDocumentFragment();
+  var metric = METRICS.filter(function(m){ return m.id === view.selectedMetric; })[0] || METRICS[0];
+
+  var pickCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Track a metric")]),
+    el("div", { class: "metric-select-grid" }, METRICS.map(function(m){
+      return el("button", {
+        class: "metric-pick" + (m.id === view.selectedMetric ? " active" : ""),
+        onclick: function(){ view.selectedMetric = m.id; render(); }
+      }, [text(m.label)]);
+    }))
+  ]);
+  frag.appendChild(pickCard);
+
+  var chartCard = el("div", { class: "card" }, [
+    el("h2", {}, [text(metric.label + " over time")])
+  ]);
+  chartCard.appendChild(renderChart(metric.id));
+  frag.appendChild(chartCard);
+
+  var formCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Log entry")])
+  ]);
+  var dateInput = el("input", { type: "date", value: todayStr(), max: todayStr() });
+  var valInput = el("input", { type: "number", step: "0.1", placeholder: "Value in " + metric.unit });
+  formCard.appendChild(el("label", { class: "field-label" }, [text("Date")]));
+  formCard.appendChild(dateInput);
+  formCard.appendChild(el("label", { class: "field-label" }, [text("Value (" + metric.unit + ")")]));
+  formCard.appendChild(valInput);
+  var errorMsg = el("div", { style: "font-size:13px;color:var(--coral);margin-top:6px;display:none" });
+  formCard.appendChild(errorMsg);
+  var saveBtn = el("button", { class: "btn", type: "button" }, [text("Save entry")]);
+  saveBtn.addEventListener("click", function(){
+    var v = parseFloat(valInput.value);
+    if (valInput.value.trim() === "" || isNaN(v)) {
+      errorMsg.textContent = "Enter a numeric value first";
+      errorMsg.style.display = "block";
+      return;
+    }
+    errorMsg.style.display = "none";
+    var d = dateInput.value || todayStr();
+    var list = state.metrics[metric.id];
+    var existing = list.filter(function(e){ return e.date === d; })[0];
+    var isNew = !existing;
+    if (existing) existing.value = v;
+    else list.push({ date: d, value: v });
+    save();
+    var cfg = pointsCfg();
+    if (isNew && cfg.metricLogPoints > 0) {
+      recordPoints(cfg.metricLogPoints, "Logged metric: " + metric.label);
+    }
+    valInput.value = "";
+    showToast("Saved " + metric.label.toLowerCase());
+    render();
+  });
+  formCard.appendChild(saveBtn);
+  frag.appendChild(formCard);
+
+  var entries = (state.metrics[metric.id] || []).slice().sort(function(a,b){ return a.date < b.date ? 1 : -1; });
+  if (entries.length) {
+    var logCard = el("div", { class: "card" }, [
+      el("h2", {}, [text("Entries")])
+    ]);
+    var logList = el("div", { class: "log-list" });
+    entries.forEach(function(e){
+      var row = el("div", { class: "log-entry" }, [
+        el("div", {}, [
+          el("div", { class: "v" }, [text(e.value + " " + metric.unit)]),
+          el("div", { class: "d" }, [text(prettyDate(e.date))])
+        ]),
+        el("button", {
+          class: "del",
+          "aria-label": "Delete entry",
+          onclick: function(){
+            state.metrics[metric.id] = state.metrics[metric.id].filter(function(x){ return x !== e; });
+            save();
+            render();
+          }
+        }, [text("×")])
+      ]);
+      logList.appendChild(row);
+    });
+    logCard.appendChild(logList);
+    frag.appendChild(logCard);
+  }
+
+  return frag;
+}
+
+function renderProgress() {
+  var frag = document.createDocumentFragment();
+
+  var modeCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("View")]),
+    el("div", { class: "metric-select-grid" }, [
+      el("button", {
+        class: "metric-pick" + (view.progressMode === "month" ? " active" : ""),
+        onclick: function(){ view.progressMode = "month"; render(); }
+      }, [text("Month")]),
+      el("button", {
+        class: "metric-pick" + (view.progressMode === "year" ? " active" : ""),
+        onclick: function(){ view.progressMode = "year"; render(); }
+      }, [text("Year")])
+    ])
+  ]);
+  frag.appendChild(modeCard);
+
+  if (view.progressMode === "month") appendMonthProgress(frag);
+  else appendYearProgress(frag);
+
+  return frag;
+}
+
+function appendMonthProgress(frag) {
+  var ym = view.progressMonth;
+  var year = +ym.slice(0, 4), month = +ym.slice(5, 7);
+  var start = ym + "-01";
+  var dim = new Date(year, month, 0).getDate();
+  var end = ym + "-" + pad(dim);
+  var monthLabel = new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  var curMonth = todayStr().slice(0, 7);
+
+  var navCard = el("div", { class: "card" });
+  navCard.appendChild(el("div", { class: "date-nav" }, [
+    el("button", {
+      onclick: function(){ view.progressMonth = shiftMonth(ym, -1); render(); },
+      "aria-label": "Previous month"
+    }, [text("‹")]),
+    el("div", {}, [ el("div", { class: "cur" }, [text(monthLabel)]) ]),
+    el("button", {
+      onclick: function(){ var n = shiftMonth(ym, 1); if (n <= curMonth) { view.progressMonth = n; render(); } },
+      "aria-label": "Next month",
+      style: ym >= curMonth ? "opacity:0.3;cursor:default" : ""
+    }, [text("›")])
+  ]));
+
+  var st = statsForRange(start, end < todayStr() ? end : todayStr());
+  navCard.appendChild(el("div", { class: "stat-grid", style: "margin-top:14px" }, [
+    el("div", { class: "stat" }, [el("div", { class: "label" }, [text("Days logged")]), el("div", { class: "value" }, [text(st.daysLogged + "/" + dim)])]),
+    el("div", { class: "stat" }, [el("div", { class: "label" }, [text("Avg completion")]), el("div", { class: "value" }, [text(Math.round(st.avgRate * 100) + "%")])]),
+    el("div", { class: "stat" }, [el("div", { class: "label" }, [text("Check-ins")]), el("div", { class: "value" }, [text("" + st.totalChecks)])]),
+    el("div", { class: "stat" }, [el("div", { class: "label" }, [text("Net points")]), el("div", { class: "value" }, [text((st.netPoints >= 0 ? "+" : "-") + Math.abs(st.netPoints))])])
+  ]));
+  frag.appendChild(navCard);
+
+  var calCard = el("div", { class: "card" }, [el("h2", {}, [text("Daily completion")])]);
+  var dow = el("div", { class: "cal-grid" });
+  ["S", "M", "T", "W", "T", "F", "S"].forEach(function(d){ dow.appendChild(el("div", { class: "cal-dow-cell" }, [text(d)])); });
+  calCard.appendChild(dow);
+  var grid = el("div", { class: "cal-grid" });
+  var firstDow = new Date(year, month - 1, 1).getDay();
+  for (var i = 0; i < firstDow; i++) grid.appendChild(el("div", { class: "cal-cell empty" }));
+  for (var day = 1; day <= dim; day++) {
+    var ds = ym + "-" + pad(day);
+    var isFuture = ds > todayStr();
+    var rec = completionRate(ds);
+    var rate = rec.total ? rec.done / rec.total : 0;
+    var cellStyle = isFuture ? "" : "background-color:var(--accent);opacity:" + (rec.done > 0 ? Math.max(0.15, rate) : 0.05) + ";";
+    grid.appendChild(el("div", {
+      class: "cal-cell" + (ds === todayStr() ? " today" : ""),
+      style: cellStyle,
+      title: ds + ": " + rec.done + "/" + rec.total + " habits"
+    }, [el("span", { class: "cal-day-num" }, [text("" + day)])]));
+  }
+  calCard.appendChild(grid);
+  frag.appendChild(calCard);
+}
+
+function appendYearProgress(frag) {
+  var yr = view.progressYear;
+  var start = yr + "-01-01", end = yr + "-12-31";
+  var curYear = todayStr().slice(0, 4);
+
+  var navCard = el("div", { class: "card" });
+  navCard.appendChild(el("div", { class: "date-nav" }, [
+    el("button", {
+      onclick: function(){ view.progressYear = String(+yr - 1); render(); },
+      "aria-label": "Previous year"
+    }, [text("‹")]),
+    el("div", {}, [ el("div", { class: "cur" }, [text(yr)]) ]),
+    el("button", {
+      onclick: function(){ var n = String(+yr + 1); if (n <= curYear) { view.progressYear = n; render(); } },
+      "aria-label": "Next year",
+      style: yr >= curYear ? "opacity:0.3;cursor:default" : ""
+    }, [text("›")])
+  ]));
+
+  var st = statsForRange(start, end < todayStr() ? end : todayStr());
+  navCard.appendChild(el("div", { class: "stat-grid", style: "margin-top:14px" }, [
+    el("div", { class: "stat" }, [el("div", { class: "label" }, [text("Days logged")]), el("div", { class: "value" }, [text("" + st.daysLogged)])]),
+    el("div", { class: "stat" }, [el("div", { class: "label" }, [text("Avg completion")]), el("div", { class: "value" }, [text(Math.round(st.avgRate * 100) + "%")])]),
+    el("div", { class: "stat" }, [el("div", { class: "label" }, [text("Check-ins")]), el("div", { class: "value" }, [text("" + st.totalChecks)])]),
+    el("div", { class: "stat" }, [el("div", { class: "label" }, [text("Net points")]), el("div", { class: "value" }, [text((st.netPoints >= 0 ? "+" : "-") + Math.abs(st.netPoints))])])
+  ]));
+  frag.appendChild(navCard);
+
+  var mCard = el("div", { class: "card" }, [el("h2", {}, [text("By month")])]);
+  var monthGrid = el("div", { class: "month-grid" });
+  for (var m = 1; m <= 12; m++) {
+    var mm = pad(m);
+    var ms = yr + "-" + mm + "-01";
+    var mdim = new Date(+yr, m, 0).getDate();
+    var me = yr + "-" + mm + "-" + pad(mdim);
+    var isFuture = ms > todayStr();
+    var mstat = isFuture ? null : statsForRange(ms, me < todayStr() ? me : todayStr());
+    var label = new Date(+yr, m - 1, 1).toLocaleDateString(undefined, { month: "short" });
+    var rate = mstat ? mstat.avgRate : 0;
+    var cellAttrs = {
+      class: "month-cell" + (ms.slice(0, 7) === todayStr().slice(0, 7) ? " current" : ""),
+      style: isFuture ? "opacity:0.25" : "background-color:var(--accent);opacity:" + Math.max(0.12, rate) + ";"
+    };
+    if (!isFuture) {
+      cellAttrs.onclick = function(mmClicked){ return function(){ view.progressMonth = yr + "-" + mmClicked; view.progressMode = "month"; render(); }; }(mm);
+    }
+    monthGrid.appendChild(el("div", cellAttrs, [
+      el("div", { class: "month-cell-label" }, [text(label)]),
+      mstat ? el("div", { class: "month-cell-pct" }, [text(Math.round(rate * 100) + "%")]) : text("")
+    ]));
+  }
+  mCard.appendChild(monthGrid);
+  frag.appendChild(mCard);
+}
+
+function renderPoints() {
+  var frag = document.createDocumentFragment();
+  var cfg = pointsCfg();
+
+  // ---- Balance ----
+  var balCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Private Points balance")]),
+    el("div", { style: "font-size:34px;font-weight:700;letter-spacing:-0.01em" }, [text(String(state.points.balance))])
+  ]);
+  frag.appendChild(balCard);
+
+  // ---- Spend points on something not in the shop ----
+  var spendCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Spend points")])
+  ]);
+  var buyTitle = el("input", { type: "text", placeholder: "What did you get?" });
+  var buyCost = el("input", { type: "number", step: "1", min: "1", placeholder: "Points to deduct" });
+  spendCard.appendChild(el("label", { class: "field-label" }, [text("Item / reason")]));
+  spendCard.appendChild(buyTitle);
+  spendCard.appendChild(el("label", { class: "field-label" }, [text("Points")]));
+  spendCard.appendChild(buyCost);
+  var spendErr = el("div", { style: "font-size:13px;color:var(--coral);margin-top:6px;display:none" });
+  spendCard.appendChild(spendErr);
+  var spendBtn = el("button", { class: "btn", type: "button" }, [text("Deduct points")]);
+  spendBtn.addEventListener("click", function(){
+    var title = buyTitle.value.trim();
+    var cost = parseInt(buyCost.value, 10);
+    if (!title) { spendErr.textContent = "Say what you spent it on"; spendErr.style.display = "block"; return; }
+    if (isNaN(cost) || cost <= 0) { spendErr.textContent = "Enter a positive number of points"; spendErr.style.display = "block"; return; }
+    if (!spendPoints(cost, "Bought: " + title)) {
+      spendErr.textContent = "Not enough points — balance is " + state.points.balance;
+      spendErr.style.display = "block";
+      return;
+    }
+    spendErr.style.display = "none";
+    showToast("-" + cost + " points");
+    render();
+  });
+  spendCard.appendChild(spendBtn);
+  frag.appendChild(spendCard);
+
+  // ---- Settings / config ----
+  var cfgCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Earning rules (settings)")])
+  ]);
+  function numField(labelText, value, onCommit) {
+    cfgCard.appendChild(el("label", { class: "field-label" }, [text(labelText)]));
+    var input = el("input", { type: "number", step: "1", value: String(value) });
+    input.addEventListener("change", function(){
+      var v = parseFloat(input.value);
+      if (isNaN(v)) return;
+      onCommit(v);
+      save();
+      showToast("Settings saved");
+    });
+    cfgCard.appendChild(input);
+  }
+  numField("Points per habit (default)", cfg.habitPoints, function(v){ cfg.habitPoints = v; });
+  numField("Streak bonus every N days (0 = off)", cfg.streakBonusEvery, function(v){ cfg.streakBonusEvery = Math.max(0, Math.round(v)); });
+  numField("Streak bonus amount", cfg.streakBonusAmount, function(v){ cfg.streakBonusAmount = v; });
+  numField("Default points per mission", cfg.missionPointsDefault, function(v){ cfg.missionPointsDefault = v; });
+  numField("Points per metric log (0 = off)", cfg.metricLogPoints, function(v){ cfg.metricLogPoints = v; });
+
+  cfgCard.appendChild(el("h3", {}, [text("Per-habit overrides")]));
+  HABITS.forEach(function(h){
+    cfgCard.appendChild(el("label", { class: "field-label" }, [text(h.title)]));
+    var cur = cfg.habitOverrides[h.id];
+    var ov = el("input", { type: "number", step: "1", placeholder: "default (" + cfg.habitPoints + ")", value: (typeof cur === "number" ? String(cur) : "") });
+    ov.addEventListener("change", function(){
+      if (ov.value.trim() === "") { delete cfg.habitOverrides[h.id]; }
+      else {
+        var v = parseFloat(ov.value);
+        if (!isNaN(v)) cfg.habitOverrides[h.id] = v;
+      }
+      save();
+      showToast("Settings saved");
+    });
+    cfgCard.appendChild(ov);
+  });
+  frag.appendChild(cfgCard);
+
+  // ---- Data backup (independent of online sync) ----
+  var backupCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Data backup")]),
+    el("div", { style: "font-size:11.5px;color:var(--text-muted);margin-bottom:12px;line-height:1.6" }, [
+      text("Online sync mirrors your data through this page's Claude connection. If that's ever unreachable, your data on THIS device is still safe locally — but keep a real backup file too, just in case.")
+    ])
+  ]);
+  var backupBtnRow = el("div", { style: "display:flex;gap:8px;flex-wrap:wrap" });
+  var exportBtn = el("button", { class: "btn secondary", type: "button", style: "margin:0;width:auto;padding:9px 14px" }, [text("Download backup (.json)")]);
+  exportBtn.addEventListener("click", function(){ exportBackup(); });
+  var importInput = el("input", { type: "file", accept: "application/json,.json", style: "display:none" });
+  var importBtn = el("button", { class: "btn secondary", type: "button", style: "margin:0;width:auto;padding:9px 14px" }, [text("Restore from backup")]);
+  importBtn.addEventListener("click", function(){ importInput.click(); });
+  importInput.addEventListener("change", function(){ importBackupFile(importInput.files && importInput.files[0]); importInput.value = ""; });
+  backupBtnRow.appendChild(exportBtn);
+  backupBtnRow.appendChild(importBtn);
+  backupBtnRow.appendChild(importInput);
+  backupCard.appendChild(backupBtnRow);
+  frag.appendChild(backupCard);
+
+  // ---- Rewards / shop (placeholder for future spending features) ----
+  var allRewards = REWARDS_DEFAULT.concat(state.rewards);
+  var shopCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Rewards shop")]),
+    el("div", { style: "font-size:11.5px;color:var(--text-muted);margin-bottom:10px" }, [text("Spend Private Points here. Built-in rewards are set in code (REWARDS_DEFAULT); add your own below.")])
+  ]);
+  allRewards.forEach(function(r){
+    var canAfford = state.points.balance >= r.cost;
+    var row = el("div", { class: "resource-item" }, [
+      el("div", { class: "r-row" }, [
+        el("div", {}, [
+          el("div", { class: "r-title" }, [text(r.title + " — " + r.cost + " pts")]),
+          el("div", { class: "r-note" }, [text(r.note || "")])
+        ]),
+        el("button", {
+          class: "btn secondary", type: "button", style: "margin:0;width:auto;padding:8px 12px" + (canAfford ? "" : ";opacity:0.4;cursor:default"),
+          onclick: function(){
+            if (!spendPoints(r.cost, "Redeemed: " + r.title)) { showToast("Not enough points"); return; }
+            showToast("Redeemed: " + r.title);
+            render();
+          }
+        }, [text("Redeem")])
+      ])
+    ]);
+    shopCard.appendChild(row);
+  });
+  var rTitle = el("input", { type: "text", placeholder: "Reward title" });
+  var rCost = el("input", { type: "number", step: "1", min: "1", placeholder: "Cost in points" });
+  shopCard.appendChild(el("label", { class: "field-label" }, [text("Add a reward")]));
+  shopCard.appendChild(rTitle);
+  shopCard.appendChild(el("label", { class: "field-label" }, [text("Cost")]));
+  shopCard.appendChild(rCost);
+  var addRewardBtn = el("button", { class: "btn secondary", type: "button" }, [text("Add reward")]);
+  addRewardBtn.addEventListener("click", function(){
+    var title = rTitle.value.trim();
+    var cost = parseInt(rCost.value, 10);
+    if (!title || isNaN(cost) || cost <= 0) { showToast("Enter a title and a cost"); return; }
+    state.rewards.push({ id: uid(), title: title, cost: cost, note: "" });
+    save();
+    render();
+  });
+  shopCard.appendChild(addRewardBtn);
+  frag.appendChild(shopCard);
+
+  // ---- Transaction history ----
+  var histCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("History")])
+  ]);
+  var txs = state.points.transactions.slice().sort(function(a,b){ return b.ts - a.ts; });
+  if (txs.length === 0) {
+    histCard.appendChild(el("div", { class: "empty-note" }, [text("No transactions yet")]));
+  } else {
+    var list = el("div", { class: "log-list" });
+    txs.forEach(function(t){
+      var positive = t.amount >= 0;
+      list.appendChild(el("div", { class: "log-entry" }, [
+        el("div", {}, [
+          el("div", { class: "v" }, [text(t.reason)]),
+          el("div", { class: "d" }, [text(prettyDate(t.date))])
+        ]),
+        el("div", { style: "font-weight:700;color:" + (positive ? "var(--success)" : "var(--coral)") }, [text((positive ? "+" : "-") + Math.abs(t.amount))])
+      ]));
+    });
+    histCard.appendChild(list);
+  }
+  frag.appendChild(histCard);
+
+  return frag;
+}
+
+function renderResources() {
+  var frag = document.createDocumentFragment();
+
+  // Shared hidden file input, reused for every "open" tap
+  var fileInput = el("input", { type: "file", accept: "application/pdf", style: "display:none" });
+  document.body.appendChild(fileInput);
+  function openPickedFile() {
+    if (!fileInput.files || !fileInput.files[0]) return;
+    var url = URL.createObjectURL(fileInput.files[0]);
+    window.open(url, "_blank");
+  }
+
+  // ---- Your books (PDFs added from this device) ----
+  var myCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Your books")])
+  ]);
+
+  if (state.myBooks.length === 0) {
+    myCard.appendChild(el("div", { class: "empty-note" }, [text("No PDFs added yet")]));
+  }
+
+  state.myBooks.forEach(function(book, idx){
+    var openHandler = function(){
+      fileInput.onchange = openPickedFile;
+      fileInput.click();
+    };
+    var item = el("div", { class: "resource-item clickable" });
+    var row = el("div", { class: "r-row" }, [
+      el("div", {}, [
+        el("div", { class: "r-title" }, [text(book.title)]),
+        el("div", { class: "r-note" }, [text("Tap to open — select the PDF on your device")])
+      ]),
+      el("div", { class: "r-arrow" }, [text("↗")])
+    ]);
+    item.appendChild(row);
+    item.setAttribute("role", "button");
+    item.setAttribute("tabindex", "0");
+    item.addEventListener("click", openHandler);
+    item.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openHandler(); } });
+
+    var delBtn = el("button", {
+      class: "log-entry del",
+      style: "padding:0;margin-top:4px;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)",
+      onclick: function(e){
+        e.stopPropagation();
+        state.myBooks.splice(idx, 1);
+        save();
+        render();
+      }
+    }, [text("Remove")]);
+    item.appendChild(delBtn);
+    myCard.appendChild(item);
+  });
+
+  var addBtn = el("button", { class: "add-resource-btn", type: "button" }, [text("+ Add a PDF")]);
+  addBtn.addEventListener("click", function(){
+    var title = window.prompt("Title for this book?");
+    if (title === null) return;
+    title = title.trim();
+    if (!title) { showToast("Enter a title first"); return; }
+    fileInput.onchange = function(){
+      if (!fileInput.files || !fileInput.files[0]) return;
+      state.myBooks.push({ title: title });
+      save();
+      openPickedFile();
+      render();
+    };
+    fileInput.click();
+  });
+  myCard.appendChild(addBtn);
+  frag.appendChild(myCard);
+
+  // ---- Curated resources ----
+  var card = el("div", { class: "card" }, [
+    el("h2", {}, [text("Books, apps, courses")])
+  ]);
+  RESOURCES.forEach(function(r){
+    card.appendChild(el("div", { class: "resource-item" }, [
+      el("div", { class: "r-title" }, [text(r.title)]),
+      el("div", { class: "r-note" }, [text(r.note)])
+    ]));
+  });
+  frag.appendChild(card);
+
+  var ethicsCard = el("div", { class: "card" }, [
+    el("h2", {}, [text("Keep in mind")]),
+    el("div", { style: "font-size:13.5px;color:var(--text-secondary);line-height:1.7" }, [
+      text("Ethical persuasion, not manipulation — honesty and respect over reading people to exploit them. Balance intense training with real recovery: sleep, leisure, social support. Watch for burnout, especially with stress-exposure work.")
+    ])
+  ]);
+  frag.appendChild(ethicsCard);
+
+
+  return frag;
+}
+
+function render() {
+  renderTabs();
+  var content = document.getElementById("content");
+  content.innerHTML = "";
+  var frag;
+  if (view.tab === "today") frag = renderToday();
+  else if (view.tab === "phases") frag = renderPhases();
+  else if (view.tab === "metrics") frag = renderMetrics();
+  else if (view.tab === "progress") frag = renderProgress();
+  else if (view.tab === "points") frag = renderPoints();
+  else frag = renderResources();
+  content.appendChild(frag);
+}
+
+// ---------- Theme toggle ----------
+
+function initTheme() {
+  if (state.theme) document.documentElement.setAttribute("data-theme", state.theme);
+  document.getElementById("themeToggle").addEventListener("click", function(){
+    var cur = document.documentElement.getAttribute("data-theme");
+    var next = cur === "dark" ? "light" : "dark";
+    // detect system default to allow a clean toggle
+    if (!cur) {
+      var systemDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      next = systemDark ? "light" : "dark";
+    }
+    document.documentElement.setAttribute("data-theme", next);
+    state.theme = next;
+    save();
+  });
+}
+
+// ---------- Init ----------
+
+load();
+initTheme();
+render();
+initSync();
+
+})();
+</script>
+</body>
+</html>
