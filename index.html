@@ -65,6 +65,15 @@
   :root[data-theme="dark"] { color-scheme: dark; }
   :root:not([data-theme="dark"]) { color-scheme: light dark; }
 
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   * { box-sizing: border-box; }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
   html, body {
@@ -78,6 +87,7 @@
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
   #app {
     max-width: 720px;
@@ -92,6 +102,7 @@
     padding: 16px 16px 14px;
     margin: -24px -16px 20px;
     border-bottom: 1px solid var(--border);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
   }
   h1 {
     font-size: 15px;
@@ -124,7 +135,9 @@
     height: 26px;
     font-size: 11px;
     cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.2s ease;
   }
+  .theme-toggle:active { transform: scale(0.85) rotate(-12deg); }
 
   nav.tabs {
     display: flex;
@@ -138,6 +151,15 @@
   }
   nav.tabs::-webkit-scrollbar { display: none; }
   #content { touch-action: pan-y; }
+
+  @keyframes cardEnterRight { from { opacity: 0; transform: translate3d(16px, 8px, 0); } to { opacity: 1; transform: none; } }
+  @keyframes cardEnterLeft  { from { opacity: 0; transform: translate3d(-16px, 8px, 0); } to { opacity: 1; transform: none; } }
+  #content.tab-in-right > .card { animation: cardEnterRight 0.32s cubic-bezier(.22,1,.36,1) both; }
+  #content.tab-in-left  > .card { animation: cardEnterLeft 0.32s cubic-bezier(.22,1,.36,1) both; }
+  #content.tab-in-right > .card:nth-child(2), #content.tab-in-left > .card:nth-child(2) { animation-delay: 0.04s; }
+  #content.tab-in-right > .card:nth-child(3), #content.tab-in-left > .card:nth-child(3) { animation-delay: 0.08s; }
+  #content.tab-in-right > .card:nth-child(4), #content.tab-in-left > .card:nth-child(4) { animation-delay: 0.12s; }
+  #content.tab-in-right > .card:nth-child(n+5), #content.tab-in-left > .card:nth-child(n+5) { animation-delay: 0.16s; }
   .tab {
     flex: 0 0 auto;
     background: none;
@@ -153,7 +175,9 @@
     cursor: pointer;
     white-space: nowrap;
     margin-bottom: -1px;
+    transition: color 0.2s ease, border-color 0.25s ease, transform 0.12s ease;
   }
+  .tab:active { transform: scale(0.93); }
   .tab.active {
     background: none;
     color: var(--text);
@@ -166,6 +190,7 @@
     border-radius: 0;
     padding: 18px 18px;
     margin-bottom: 12px;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
   }
   .card h2 {
     font-size: 11px;
@@ -216,7 +241,7 @@
     height: 100%;
     background: var(--accent);
     border-radius: 0;
-    transition: width 0.3s ease;
+    transition: width 0.5s cubic-bezier(.22,1,.36,1);
   }
   .progress-label {
     display: flex;
@@ -238,6 +263,7 @@
     background: var(--surface);
     border-radius: 0;
     padding: 13px;
+    transition: background-color 0.3s ease;
   }
   .stat .label { font-size: 10.5px; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.07em; }
   .stat .value { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
@@ -265,12 +291,19 @@
     color: transparent;
     font-size: 12px;
     font-weight: 700;
-    transition: background 0.15s, border-color 0.15s;
+    transition: background 0.15s, border-color 0.15s, transform 0.12s ease;
   }
+  .habit-check:active { transform: scale(0.88); }
   .habit-check.checked {
     background: var(--success);
     border-color: var(--success);
     color: var(--success-text);
+    animation: checkPop 0.3s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes checkPop {
+    0% { transform: scale(0.55); }
+    65% { transform: scale(1.15); }
+    100% { transform: scale(1); }
   }
   .habit-text { flex: 1; min-width: 0; }
   .habit-title { font-size: 13.5px; font-weight: 500; line-height: 1.4; letter-spacing: 0.005em; }
@@ -303,7 +336,9 @@
     border-radius: 0;
     cursor: pointer;
     font-size: 14px;
+    transition: transform 0.12s ease, border-color 0.2s ease;
   }
+  .date-nav button:active { transform: scale(0.88); }
   .date-nav .cur { font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
   .date-nav .today-link {
     font-size: 10.5px;
@@ -364,8 +399,9 @@
     cursor: pointer;
     margin-top: 14px;
     width: 100%;
+    transition: opacity 0.12s ease, transform 0.12s ease;
   }
-  .btn:active { opacity: 0.8; }
+  .btn:active { opacity: 0.8; transform: scale(0.98); }
   .btn.secondary {
     background: none;
     border: 1px solid var(--border-strong);
@@ -1890,9 +1926,22 @@ function renderResources() {
   return frag;
 }
 
+var lastRenderedTab = null;
+
+function tabIndexOf(id) {
+  for (var i = 0; i < TABS.length; i++) { if (TABS[i].id === id) return i; }
+  return -1;
+}
+
 function render() {
   renderTabs();
   var content = document.getElementById("content");
+  var directionClass = null;
+  if (lastRenderedTab !== null && lastRenderedTab !== view.tab) {
+    directionClass = tabIndexOf(view.tab) > tabIndexOf(lastRenderedTab) ? "tab-in-right" : "tab-in-left";
+  }
+  lastRenderedTab = view.tab;
+  content.classList.remove("tab-in-right", "tab-in-left");
   content.innerHTML = "";
   var frag;
   if (view.tab === "today") frag = renderToday();
@@ -1902,6 +1951,10 @@ function render() {
   else if (view.tab === "points") frag = renderPoints();
   else frag = renderResources();
   content.appendChild(frag);
+  if (directionClass) {
+    void content.offsetWidth;
+    content.classList.add(directionClass);
+  }
 }
 
 // ---------- Theme toggle ----------
