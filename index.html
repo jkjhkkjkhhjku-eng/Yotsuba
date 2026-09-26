@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Ayanokoji Plan Tracker</title>
+<title>To Moon</title>
 <meta name="theme-color" content="#050505">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Ayanokoji">
+<meta name="apple-mobile-web-app-title" content="To Moon">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -75,6 +75,24 @@
   }
 
   * { box-sizing: border-box; }
+
+  #bgVideo {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: -2;
+    background: #000;
+    pointer-events: none;
+  }
+  #bgScrim {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.35) 100%);
+  }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
   html, body {
     height: 100%;
@@ -82,6 +100,7 @@
   }
   body {
     background: var(--bg);
+    background: color-mix(in srgb, var(--bg) 55%, transparent);
     color: var(--text);
     font-family: "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     padding-top: env(safe-area-inset-top, 0px);
@@ -98,6 +117,9 @@
     position: sticky;
     top: env(safe-area-inset-top, 0px);
     background: var(--bg);
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     z-index: 10;
     padding: 16px 16px 14px;
     margin: -24px -16px 20px;
@@ -186,6 +208,9 @@
 
   .card {
     background: var(--surface);
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border);
     border-radius: 0;
     padding: 18px 18px;
@@ -261,6 +286,9 @@
   }
   .stat {
     background: var(--surface);
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border-radius: 0;
     padding: 13px;
     transition: background-color 0.3s ease;
@@ -589,10 +617,14 @@
 </style>
 </head>
 <body>
+<video id="bgVideo" autoplay muted loop playsinline preload="auto" aria-hidden="true">
+  <source src="blackhole.mp4" type="video/mp4">
+</video>
+<div id="bgScrim" aria-hidden="true"></div>
 <div id="app">
   <header class="top">
     <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">◐</button>
-    <h1>Ayanokoji plan</h1>
+    <h1>To Moon</h1>
     <div class="sub">Cognitive · social · emotional · physical</div>
     <div class="sync-status" id="syncStatus">● Local only</div>
     <nav class="tabs" id="tabs"></nav>
@@ -766,7 +798,7 @@ function save() {
 function backupFilename() {
   var d = new Date();
   var stamp = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
-  return "ayanokoji-tracker-backup-" + stamp + ".json";
+  return "to-moon-backup-" + stamp + ".json";
 }
 
 function backupPayload() {
@@ -2024,6 +2056,20 @@ function initSwipeNav() {
   content.addEventListener("touchcancel", function(){ tracking = false; });
 }
 
+// ---------- Background live wallpaper ----------
+
+function initBgVideo() {
+  var v = document.getElementById("bgVideo");
+  if (!v) return;
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) { v.pause(); return; }
+  v.play().catch(function(){});
+  document.addEventListener("visibilitychange", function(){
+    if (document.hidden) v.pause();
+    else v.play().catch(function(){});
+  });
+}
+
 // ---------- Init ----------
 
 load();
@@ -2031,6 +2077,7 @@ initTheme();
 render();
 initSync();
 initSwipeNav();
+initBgVideo();
 
 })();
 </script>
