@@ -2234,6 +2234,7 @@ function renderResources() {
 
 var lastRenderedTab = null;
 var suppressEnterAnim = false;
+var renderQueued = false;
 
 function tabIndexOf(id) {
   for (var i = 0; i < TABS.length; i++) { if (TABS[i].id === id) return i; }
@@ -2251,6 +2252,12 @@ function contentForTab(tabId) {
 }
 
 function render() {
+  // A checkbox/delete timer (or a remote sync update) can fire mid-swipe.
+  // Rebuilding #content right now would yank the swipe-track out from
+  // under an active drag. Defer — the drag's own settle() re-renders
+  // when it finishes, and that will already reflect the latest state.
+  if (document.body.classList.contains("swiping")) { renderQueued = true; return; }
+  renderQueued = false;
   renderTabs();
   var content = document.getElementById("content");
   var directionClass = null;
@@ -2383,6 +2390,7 @@ function initSwipeNav() {
         content.style.transition = "";
         content.style.transform = "";
         document.body.classList.remove("swiping");
+        if (renderQueued) render();
       }, 230);
       tracking = false;
       return;
