@@ -186,6 +186,15 @@
     flex: 0 0 50%;
     min-width: 0;
     max-width: 50%;
+    contain: layout style paint;
+  }
+  /* Blur is expensive to recompute every frame while transforming — drop it
+     for the brief moment we're actively dragging, restore on release. */
+  body.swiping .card,
+  body.swiping header.top {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transition: none !important;
   }
 
   @keyframes cardEnterRight { from { opacity: 0; transform: translate3d(16px, 8px, 0); } to { opacity: 1; transform: none; } }
@@ -2291,6 +2300,20 @@ function initSwipeNav() {
   var DISTANCE_RATIO = 0.28;  // fraction of panel width needed to commit
   var VELOCITY_COMMIT = 0.5;  // px/ms flick speed that commits regardless of distance
   var EASE = "cubic-bezier(.22,.61,.36,1)";
+  var rafId = null, pendingDx = 0, haveDrag = false;
+
+  function scheduleDrag(dx) {
+    pendingDx = dx;
+    haveDrag = true;
+    if (rafId === null) rafId = requestAnimationFrame(flushDrag);
+  }
+
+  function flushDrag() {
+    rafId = null;
+    if (!haveDrag) return;
+    haveDrag = false;
+    applyDragNow(pendingDx);
+  }
 
   function neighborId(step) {
     var idx = tabIndexOf(view.tab);
@@ -2301,6 +2324,7 @@ function initSwipeNav() {
 
   function beginDrag(initialDx) {
     dragging = true;
+    document.body.classList.add("swiping");
     dir = initialDx < 0 ? -1 : 1;
     var nId = neighborId(dir === -1 ? 1 : -1);
     panelW = content.getBoundingClientRect().width;
@@ -2329,6 +2353,11 @@ function initSwipeNav() {
 
   function applyDrag(dx) {
     if (!dragging) return;
+    scheduleDrag(dx);
+  }
+
+  function applyDragNow(dx) {
+    if (!dragging) return;
     if (!track) {
       // rubber-band, clamped and damped
       var rb = Math.max(-42, Math.min(42, dx * 0.35));
@@ -2344,12 +2373,17 @@ function initSwipeNav() {
   function settle(dx) {
     if (!dragging) { tracking = false; return; }
     dragging = false;
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; haveDrag = false; }
 
     if (!track) {
       // spring the rubber-band back to rest
       content.style.transition = "transform 220ms " + EASE;
       content.style.transform = "translate3d(0,0,0)";
-      setTimeout(function(){ content.style.transition = ""; content.style.transform = ""; }, 230);
+      setTimeout(function(){
+        content.style.transition = "";
+        content.style.transform = "";
+        document.body.classList.remove("swiping");
+      }, 230);
       tracking = false;
       return;
     }
@@ -2364,6 +2398,7 @@ function initSwipeNav() {
     track.style.transform = "translate3d(" + targetPct + "%,0,0)";
 
     setTimeout(function(){
+      document.body.classList.remove("swiping");
       if (commit) {
         var nId = neighborId(dir === -1 ? 1 : -1);
         if (nId) {
@@ -2398,12 +2433,14 @@ function initSwipeNav() {
     var dx = x - startX;
     var dy = y - startY;
     if (!horizontal && !dragging) {
-      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-        horizontal = true;
-        beginDrag(dx);
-      } else if (Math.abs(dy) > 10) {
-        tracking = false; // vertical scroll wins, let the page handle it
-        return;
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        if (Math.abs(dx) > Math.abs(dy)) {
+          horizontal = true;
+          beginDrag(dx);
+        } else {
+          tracking = false; // vertical scroll wins, let the page handle it
+          return;
+        }
       }
     }
     if (horizontal) {
