@@ -176,7 +176,17 @@
     scrollbar-width: none;
   }
   nav.tabs::-webkit-scrollbar { display: none; }
-  #content { touch-action: pan-y; }
+  #content { touch-action: pan-y; overflow-x: hidden; }
+  .swipe-track {
+    display: flex;
+    width: 200%;
+    will-change: transform;
+  }
+  .swipe-panel {
+    flex: 0 0 50%;
+    min-width: 0;
+    max-width: 50%;
+  }
 
   @keyframes cardEnterRight { from { opacity: 0; transform: translate3d(16px, 8px, 0); } to { opacity: 1; transform: none; } }
   @keyframes cardEnterLeft  { from { opacity: 0; transform: translate3d(-16px, 8px, 0); } to { opacity: 1; transform: none; } }
@@ -2214,31 +2224,37 @@ function renderResources() {
 }
 
 var lastRenderedTab = null;
+var suppressEnterAnim = false;
 
 function tabIndexOf(id) {
   for (var i = 0; i < TABS.length; i++) { if (TABS[i].id === id) return i; }
   return -1;
 }
 
+function contentForTab(tabId) {
+  if (tabId === "today") return renderToday();
+  if (tabId === "todo") return renderTodo();
+  if (tabId === "phases") return renderPhases();
+  if (tabId === "metrics") return renderMetrics();
+  if (tabId === "progress") return renderProgress();
+  if (tabId === "points") return renderPoints();
+  return renderResources();
+}
+
 function render() {
   renderTabs();
   var content = document.getElementById("content");
   var directionClass = null;
-  if (lastRenderedTab !== null && lastRenderedTab !== view.tab) {
+  if (lastRenderedTab !== null && lastRenderedTab !== view.tab && !suppressEnterAnim) {
     directionClass = tabIndexOf(view.tab) > tabIndexOf(lastRenderedTab) ? "tab-in-right" : "tab-in-left";
   }
+  suppressEnterAnim = false;
   lastRenderedTab = view.tab;
   content.classList.remove("tab-in-right", "tab-in-left");
+  content.style.transform = "";
+  content.style.transition = "";
   content.innerHTML = "";
-  var frag;
-  if (view.tab === "today") frag = renderToday();
-  else if (view.tab === "todo") frag = renderTodo();
-  else if (view.tab === "phases") frag = renderPhases();
-  else if (view.tab === "metrics") frag = renderMetrics();
-  else if (view.tab === "progress") frag = renderProgress();
-  else if (view.tab === "points") frag = renderPoints();
-  else frag = renderResources();
-  content.appendChild(frag);
+  content.appendChild(contentForTab(view.tab));
   if (directionClass) {
     void content.offsetWidth;
     content.classList.add(directionClass);
@@ -2268,48 +2284,147 @@ function initTheme() {
 function initSwipeNav() {
   var content = document.getElementById("content");
   var startX = 0, startY = 0, tracking = false, horizontal = false;
-  var THRESHOLD = 55;
+  var dragging = false;      // true once we've committed to a horizontal swipe gesture
+  var dir = 0;                // -1 = moving to next tab, +1 = moving to prev tab, 0 = edge rubber-band only
+  var track = null, panelW = 0;
+  var lastX = 0, lastT = 0, velocity = 0;
+  var DISTANCE_RATIO = 0.28;  // fraction of panel width needed to commit
+  var VELOCITY_COMMIT = 0.5;  // px/ms flick speed that commits regardless of distance
+  var EASE = "cubic-bezier(.22,.61,.36,1)";
+
+  function neighborId(step) {
+    var idx = tabIndexOf(view.tab);
+    var n = idx + step;
+    if (n < 0 || n >= TABS.length) return null;
+    return TABS[n].id;
+  }
+
+  function beginDrag(initialDx) {
+    dragging = true;
+    dir = initialDx < 0 ? -1 : 1;
+    var nId = neighborId(dir === -1 ? 1 : -1);
+    panelW = content.getBoundingClientRect().width;
+
+    if (!nId) {
+      // No neighbor that way — plain rubber-band on the live content, no track needed.
+      dir = 0;
+      track = null;
+      content.style.transition = "";
+      return;
+    }
+
+    var curFrag = document.createDocumentFragment();
+    while (content.firstChild) curFrag.appendChild(content.firstChild);
+    var curPanel = el("div", { class: "swipe-panel" });
+    curPanel.appendChild(curFrag);
+    var nextPanel = el("div", { class: "swipe-panel" });
+    nextPanel.appendChild(contentForTab(nId));
+
+    track = el("div", { class: "swipe-track" });
+    if (dir === -1) { track.appendChild(curPanel); track.appendChild(nextPanel); }
+    else { track.appendChild(nextPanel); track.appendChild(curPanel); }
+    track.style.transition = "";
+    content.appendChild(track);
+  }
+
+  function applyDrag(dx) {
+    if (!dragging) return;
+    if (!track) {
+      // rubber-band, clamped and damped
+      var rb = Math.max(-42, Math.min(42, dx * 0.35));
+      content.style.transform = "translate3d(" + rb + "px,0,0)";
+      return;
+    }
+    if (dir === -1) dx = Math.max(-panelW, Math.min(0, dx));
+    else dx = Math.max(0, Math.min(panelW, dx));
+    var basePct = dir === -1 ? 0 : -50;
+    track.style.transform = "translate3d(calc(" + basePct + "% + " + dx + "px),0,0)";
+  }
+
+  function settle(dx) {
+    if (!dragging) { tracking = false; return; }
+    dragging = false;
+
+    if (!track) {
+      // spring the rubber-band back to rest
+      content.style.transition = "transform 220ms " + EASE;
+      content.style.transform = "translate3d(0,0,0)";
+      setTimeout(function(){ content.style.transition = ""; content.style.transform = ""; }, 230);
+      tracking = false;
+      return;
+    }
+
+    var progress = Math.abs(dx) / panelW;
+    var fastFlick = Math.abs(velocity) > VELOCITY_COMMIT && (dx < 0 ? dir === -1 : dir === 1);
+    var commit = fastFlick || progress > DISTANCE_RATIO;
+
+    var targetPct = commit ? (dir === -1 ? -50 : 0) : (dir === -1 ? 0 : -50);
+    track.style.transition = "transform 240ms " + EASE;
+    void track.offsetWidth;
+    track.style.transform = "translate3d(" + targetPct + "%,0,0)";
+
+    setTimeout(function(){
+      if (commit) {
+        var nId = neighborId(dir === -1 ? 1 : -1);
+        if (nId) {
+          suppressEnterAnim = true;
+          view.tab = nId;
+          render();
+          var nav = document.getElementById("tabs");
+          var activeBtn = nav.querySelector(".tab.active");
+          if (activeBtn && activeBtn.scrollIntoView) activeBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+          tracking = false;
+          return;
+        }
+      }
+      // cancelled — just rebuild the current tab cleanly
+      render();
+      tracking = false;
+    }, 250);
+  }
 
   content.addEventListener("touchstart", function(e){
-    if (e.touches.length !== 1) return;
+    if (e.touches.length !== 1 || dragging) return;
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
+    lastX = startX; lastT = e.timeStamp; velocity = 0;
     tracking = true;
     horizontal = false;
   }, { passive: true });
 
   content.addEventListener("touchmove", function(e){
     if (!tracking || e.touches.length !== 1) return;
-    var dx = e.touches[0].clientX - startX;
-    var dy = e.touches[0].clientY - startY;
-    if (!horizontal && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      horizontal = true;
+    var x = e.touches[0].clientX, y = e.touches[0].clientY;
+    var dx = x - startX;
+    var dy = y - startY;
+    if (!horizontal && !dragging) {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        horizontal = true;
+        beginDrag(dx);
+      } else if (Math.abs(dy) > 10) {
+        tracking = false; // vertical scroll wins, let the page handle it
+        return;
+      }
     }
-    if (horizontal && e.cancelable) e.preventDefault();
+    if (horizontal) {
+      if (e.cancelable) e.preventDefault();
+      var dt = e.timeStamp - lastT;
+      if (dt > 0) velocity = (x - lastX) / dt;
+      lastX = x; lastT = e.timeStamp;
+      applyDrag(dx);
+    }
   }, { passive: false });
 
-  function finish(endX) {
-    if (!tracking) return;
-    tracking = false;
-    if (!horizontal) return;
-    var dx = endX - startX;
-    if (Math.abs(dx) < THRESHOLD) return;
-    var idx = -1;
-    for (var i = 0; i < TABS.length; i++) { if (TABS[i].id === view.tab) { idx = i; break; } }
-    if (idx === -1) return;
-    if (dx < 0 && idx < TABS.length - 1) { view.tab = TABS[idx + 1].id; }
-    else if (dx > 0 && idx > 0) { view.tab = TABS[idx - 1].id; }
-    else return;
-    render();
-    var nav = document.getElementById("tabs");
-    var activeBtn = nav.querySelector(".tab.active");
-    if (activeBtn && activeBtn.scrollIntoView) activeBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }
-
   content.addEventListener("touchend", function(e){
-    finish(e.changedTouches[0].clientX);
+    if (!tracking) return;
+    var dx = e.changedTouches[0].clientX - startX;
+    if (!horizontal) { tracking = false; return; }
+    settle(dx);
   });
-  content.addEventListener("touchcancel", function(){ tracking = false; });
+  content.addEventListener("touchcancel", function(){
+    if (dragging) { velocity = 0; settle(0); }
+    tracking = false;
+  });
 }
 
 // ---------- Background live wallpaper ----------
