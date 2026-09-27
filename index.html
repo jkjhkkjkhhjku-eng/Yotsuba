@@ -40,6 +40,8 @@
     --amber: #8fb4c4;
     --amber-text: #b8d4e0;
     --coral: #b45a4a;
+    --todo-accent: #f5a623;
+    --todo-accent-ink: #1a1200;
     --radius: 2px;
     font-synthesis: none;
   }
@@ -60,6 +62,8 @@
       --amber: #35576a;
       --amber-text: #2a4655;
       --coral: #8a3f30;
+      --todo-accent: #d9860f;
+      --todo-accent-ink: #fffaf0;
     }
   }
   :root[data-theme="dark"] { color-scheme: dark; }
@@ -594,6 +598,150 @@
   }
   .add-resource-btn:hover { color: var(--text); border-color: var(--text-secondary); }
 
+  /* ---- To-Do tab ---- */
+  .todo-heading {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 4px 0 18px;
+    color: var(--text);
+  }
+  .todo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 90px;
+  }
+  .todo-pill {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 14px;
+    transition: opacity 0.3s ease, transform 0.3s ease, background-color 0.3s ease;
+  }
+  .todo-pill.completed { opacity: 0.55; }
+  .todo-pill.todo-exiting { animation: todoExit 0.3s ease forwards; }
+  .todo-pill.todo-entering { animation: todoEnter 0.36s cubic-bezier(.22,1,.36,1) both; }
+  @keyframes todoExit { to { opacity: 0; transform: translateY(10px) scale(0.97); } }
+  @keyframes todoEnter { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+
+  .todo-checkbox {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    border: 1.5px solid var(--border-strong);
+    background: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  }
+  .todo-checkbox:active { transform: scale(0.87); }
+  .todo-checkbox.checked {
+    background: var(--todo-accent);
+    border-color: var(--todo-accent);
+    color: var(--todo-accent-ink);
+    animation: checkPop 0.3s cubic-bezier(.34,1.56,.64,1);
+  }
+  .todo-checkbox.checked.muted {
+    background: var(--border-strong);
+    border-color: var(--border-strong);
+    color: var(--text-muted);
+    animation: none;
+  }
+
+  .todo-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .todo-text-inner {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    font-size: 14.5px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--text);
+    word-break: break-word;
+  }
+  .todo-text-inner.done { color: var(--text-muted); }
+  .todo-strike {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    height: 1.5px;
+    width: 0;
+    background: var(--text-muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .todo-text-inner.animating .todo-strike { animation: todoStrikeGrow 0.38s ease forwards; }
+  .todo-text-inner.done .todo-strike { width: 100%; }
+  @keyframes todoStrikeGrow { from { width: 0; } to { width: 100%; } }
+
+  .todo-del {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 17px;
+    line-height: 1;
+    padding: 4px 2px 4px 8px;
+    cursor: pointer;
+  }
+  .todo-del:active { transform: scale(0.85); }
+
+  .todo-completed-toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 8px 2px 2px;
+    cursor: pointer;
+  }
+  .todo-completed-toggle .chev {
+    display: inline-block;
+    font-size: 11px;
+    transition: transform 0.2s ease;
+  }
+  .todo-completed-toggle.open .chev { transform: rotate(180deg); }
+
+  .todo-fab {
+    position: fixed;
+    right: 20px;
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--todo-accent);
+    color: var(--todo-accent-ink);
+    border: none;
+    font-size: 26px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+    z-index: 40;
+    transition: transform 0.12s ease;
+  }
+  .todo-fab:active { transform: scale(0.9); }
+
   #toast {
     position: fixed;
     bottom: calc(20px + env(safe-area-inset-bottom, 0px));
@@ -749,7 +897,8 @@ var state = {
   points: { balance: 0, transactions: [] },
   pointsConfig: null,
   missions: [],
-  rewards: []
+  rewards: [],
+  todos: []
 };
 
 // Apply a full state object (from localStorage or the online database) onto
@@ -763,6 +912,7 @@ function applyState(data) {
   state.points = data.points || { balance: 0, transactions: [] };
   state.missions = data.missions || [];
   state.rewards = data.rewards || [];
+  state.todos = data.todos || [];
   var savedCfg = data.pointsConfig || {};
   state.pointsConfig = Object.assign({}, POINTS_CONFIG_DEFAULT, savedCfg, {
     habitOverrides: Object.assign({}, POINTS_CONFIG_DEFAULT.habitOverrides, savedCfg.habitOverrides || {})
@@ -1131,11 +1281,14 @@ function overallStats() {
 
 var view = {
   tab: "today", selectedDate: todayStr(), selectedMetric: METRICS[0].id,
-  progressMode: "month", progressMonth: todayStr().slice(0, 7), progressYear: todayStr().slice(0, 4)
+  progressMode: "month", progressMonth: todayStr().slice(0, 7), progressYear: todayStr().slice(0, 4),
+  todoShowCompleted: true
 };
+var todoLastSettledId = null;
 
 var TABS = [
   { id: "today", label: "Today" },
+  { id: "todo", label: "To-Do" },
   { id: "phases", label: "Phases" },
   { id: "metrics", label: "Metrics" },
   { id: "progress", label: "Progress" },
@@ -1862,6 +2015,108 @@ function renderPoints() {
   return frag;
 }
 
+function renderTodoPill(td, settled) {
+  var checkbox = el("button", {
+    class: "todo-checkbox" + (td.done ? " checked" : "") + (settled && td.done ? " muted" : ""),
+    type: "button",
+    "aria-label": (td.done ? "Mark incomplete: " : "Mark complete: ") + td.text
+  }, [text("✓")]);
+
+  var textInner = el("span", { class: "todo-text-inner" + (td.done ? " done" : "") }, [
+    text(td.text),
+    el("span", { class: "todo-strike" })
+  ]);
+  var textWrap = el("div", { class: "todo-text" }, [textInner]);
+
+  var delBtn = el("button", {
+    class: "todo-del",
+    type: "button",
+    "aria-label": "Delete task"
+  }, [text("×")]);
+
+  var pill = el("div", {
+    class: "todo-pill" + (settled && td.done ? " completed" : "") + (todoLastSettledId && td.id === todoLastSettledId ? " todo-entering" : "")
+  }, [checkbox, textWrap, delBtn]);
+
+  if (todoLastSettledId && td.id === todoLastSettledId) todoLastSettledId = null;
+
+  delBtn.addEventListener("click", function(){
+    state.todos = state.todos.filter(function(x){ return x !== td; });
+    save();
+    pill.classList.add("todo-exiting");
+    setTimeout(render, 260);
+  });
+
+  checkbox.addEventListener("click", function(){
+    if (td.done) {
+      // Unchecking — pull it straight back into the open list
+      td.done = false;
+      save();
+      render();
+      return;
+    }
+    // Checking — draw the strike-through, then settle it into Completed
+    checkbox.classList.add("checked");
+    textInner.classList.add("animating");
+    setTimeout(function(){
+      td.done = true;
+      todoLastSettledId = td.id;
+      save();
+      pill.classList.add("todo-exiting");
+      setTimeout(render, 300);
+    }, 380);
+  });
+
+  return pill;
+}
+
+function renderTodo() {
+  var frag = document.createDocumentFragment();
+
+  frag.appendChild(el("div", { class: "todo-heading" }, [text("Tasks")]));
+
+  var list = el("div", { class: "todo-list" });
+  var open = state.todos.filter(function(t){ return !t.done; });
+  var completed = state.todos.filter(function(t){ return t.done; });
+
+  if (state.todos.length === 0) {
+    list.appendChild(el("div", { class: "empty-note" }, [text("No tasks yet — tap + to add one")]));
+  }
+
+  open.forEach(function(td){ list.appendChild(renderTodoPill(td, false)); });
+
+  if (completed.length > 0) {
+    var toggle = el("button", {
+      class: "todo-completed-toggle" + (view.todoShowCompleted ? " open" : ""),
+      type: "button",
+      onclick: function(){ view.todoShowCompleted = !view.todoShowCompleted; render(); }
+    }, [
+      el("span", { class: "chev" }, [text("⌄")]),
+      text("Completed " + completed.length)
+    ]);
+    list.appendChild(toggle);
+    if (view.todoShowCompleted) {
+      completed.forEach(function(td){ list.appendChild(renderTodoPill(td, true)); });
+    }
+  }
+
+  frag.appendChild(list);
+
+  var fab = el("button", { class: "todo-fab", type: "button", "aria-label": "Add task" }, [text("+")]);
+  fab.addEventListener("click", function(){
+    var t = window.prompt("Task?");
+    if (t === null) return;
+    t = t.trim();
+    if (!t) { showToast("Enter a task first"); return; }
+    state.todos.push({ id: uid(), text: t, done: false, ts: Date.now() });
+    save();
+    render();
+  });
+  frag.appendChild(fab);
+
+  return frag;
+}
+
 function renderResources() {
   var frag = document.createDocumentFragment();
 
@@ -1977,6 +2232,7 @@ function render() {
   content.innerHTML = "";
   var frag;
   if (view.tab === "today") frag = renderToday();
+  else if (view.tab === "todo") frag = renderTodo();
   else if (view.tab === "phases") frag = renderPhases();
   else if (view.tab === "metrics") frag = renderMetrics();
   else if (view.tab === "progress") frag = renderProgress();
