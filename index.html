@@ -121,9 +121,7 @@
     position: sticky;
     top: env(safe-area-inset-top, 0px);
     background: var(--bg);
-    background: color-mix(in srgb, var(--bg) 72%, transparent);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
     z-index: 10;
     padding: 16px 16px 14px;
     margin: -24px -16px 20px;
@@ -188,12 +186,10 @@
     max-width: 50%;
     contain: layout style paint;
   }
-  /* Blur is expensive to recompute every frame while transforming — drop it
-     for the brief moment we're actively dragging, restore on release. */
+  /* Suppress background-color/border transitions while actively dragging —
+     avoids extra paint work fighting the swipe transform each frame. */
   body.swiping .card,
   body.swiping header.top {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
     transition: none !important;
   }
 
@@ -231,9 +227,7 @@
 
   .card {
     background: var(--surface);
-    background: color-mix(in srgb, var(--surface) 80%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
     border: 1px solid var(--border);
     border-radius: 0;
     padding: 18px 18px;
@@ -309,9 +303,7 @@
   }
   .stat {
     background: var(--surface);
-    background: color-mix(in srgb, var(--surface) 82%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
     border-radius: 0;
     padding: 13px;
     transition: background-color 0.3s ease;
