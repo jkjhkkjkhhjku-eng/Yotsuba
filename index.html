@@ -2486,6 +2486,24 @@ function initBgVideo() {
   });
 }
 
+// ---------- Keep #content tall enough to always be swipeable ----------
+// #content has no explicit height, so on short tabs (few/no todos) there's
+// blank space below it that belongs to #app/body, not #content — and since
+// the swipe listeners live on #content, touches starting in that gap never
+// reach them. Force a minimum height down to the bottom of the viewport.
+function fitContentMinHeight() {
+  var header = document.querySelector("header.top");
+  var content = document.getElementById("content");
+  if (!header || !content) return;
+  var headerBottom = header.getBoundingClientRect().bottom;
+  var appEl = document.getElementById("app");
+  var appPadBottom = appEl ? parseFloat(getComputedStyle(appEl).paddingBottom) || 0 : 0;
+  var minH = window.innerHeight - headerBottom - appPadBottom;
+  content.style.minHeight = Math.max(minH, 0) + "px";
+}
+window.addEventListener("resize", fitContentMinHeight);
+window.addEventListener("orientationchange", fitContentMinHeight);
+
 // ---------- Init ----------
 
 load();
@@ -2494,6 +2512,7 @@ render();
 initSync();
 initSwipeNav();
 initBgVideo();
+fitContentMinHeight();
 
 })();
 </script>
