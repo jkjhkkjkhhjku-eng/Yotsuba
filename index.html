@@ -477,6 +477,12 @@
     box-shadow: inset 0 -2px 0 var(--accent);
   }
 
+  .focus-clock-wrap { text-align: center; padding: 22px 0 4px; }
+  .focus-clock { font-size: 52px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+  .focus-task-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 8px; }
+  .focus-btn-row { display: flex; gap: 10px; margin-top: 14px; }
+  .focus-btn-row .btn { margin-top: 0; }
+
   .cal-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -862,6 +868,9 @@ var METRICS = [
   { id: "pushups", label: "Max push-ups", unit: "reps", color: "success" }
 ];
 
+// Focus tab — quick-pick session lengths (minutes)
+var FOCUS_PRESETS = [15, 25, 30, 45, 60];
+
 var RESOURCES = [
   { title: "Make It Stick — Brown, Roediger, McDaniel", note: "Evidence-based learning: spacing, retrieval practice" },
   { title: "Moonwalking with Einstein — Joshua Foer", note: "Memory palaces and mnemonics" },
@@ -909,7 +918,9 @@ var state = {
   pointsConfig: null,
   missions: [],
   rewards: [],
-  todos: []
+  todos: [],
+  focus: null,
+  focusSessions: []
 };
 
 // Apply a full state object (from localStorage or the online database) onto
@@ -924,6 +935,14 @@ function applyState(data) {
   state.missions = data.missions || [];
   state.rewards = data.rewards || [];
   state.todos = data.todos || [];
+  state.focusSessions = data.focusSessions || [];
+  var focusDefaults = { durationSec: 25 * 60, remainingSec: 25 * 60, running: false, endTs: null, taskId: null };
+  state.focus = Object.assign({}, focusDefaults, data.focus || {});
+  if (state.focus.running && state.focus.endTs) {
+    // Recompute from the absolute end time so a closed tab/app still lands
+    // on the right remaining seconds once we're back.
+    state.focus.remainingSec = Math.max(0, Math.round((state.focus.endTs - Date.now()) / 1000));
+  }
   var savedCfg = data.pointsConfig || {};
   state.pointsConfig = Object.assign({}, POINTS_CONFIG_DEFAULT, savedCfg, {
     habitOverrides: Object.assign({}, POINTS_CONFIG_DEFAULT.habitOverrides, savedCfg.habitOverrides || {})
@@ -939,6 +958,9 @@ function load() {
   } catch (e) { /* start fresh */ }
   METRICS.forEach(function(m) { if (!state.metrics[m.id]) state.metrics[m.id] = []; });
   if (!state.pointsConfig) state.pointsConfig = Object.assign({}, POINTS_CONFIG_DEFAULT, { habitOverrides: {} });
+  if (state.focus.running && state.focus.remainingSec <= 0) {
+    completeFocusSession(true); // finished while the app was closed — log it quietly
+  }
   if (isFirstRun) {
     state.myBooks.push({ title: "The 48 Laws of Power — Robert Greene" });
     if (STARTING_BALANCE) {
@@ -1300,6 +1322,7 @@ var todoLastSettledId = null;
 var TABS = [
   { id: "today", label: "Today" },
   { id: "todo", label: "To-Do" },
+  { id: "focus", label: "Focus" },
   { id: "phases", label: "Phases" },
   { id: "metrics", label: "Metrics" },
   { id: "progress", label: "Progress" },
@@ -2128,6 +2151,241 @@ function renderTodo() {
   return frag;
 }
 
+// ---------- Focus timer ----------
+// state.focus holds the live/paused timer; state.focusSessions is the log.
+// A finished session marks today's "pomodoro" habit done (awarding its
+// habit points the first time only) and logs its length into the
+// "focus_min" ("Longest focus span") metric, taking the max for the day —
+// so Focus sessions feed straight into the existing habit + metrics system.
+
+function fmtClock(totalSec) {
+  var s = Math.max(0, Math.round(totalSec));
+  var m = Math.floor(s / 60);
+  var r = s % 60;
+  return (m < 10 ? "0" + m : "" + m) + ":" + pad(r);
+}
+
+function focusSessionsToday() {
+  var d = todayStr();
+  return state.focusSessions.filter(function(s){ return s.date === d; });
+}
+
+function startFocusTimer() {
+  var f = state.focus;
+  f.running = true;
+  f.endTs = Date.now() + f.remainingSec * 1000;
+  save();
+  render();
+}
+
+function pauseFocusTimer() {
+  var f = state.focus;
+  if (!f.running) return;
+  f.remainingSec = Math.max(0, Math.round((f.endTs - Date.now()) / 1000));
+  f.running = false;
+  f.endTs = null;
+  save();
+  render();
+}
+
+function resetFocusTimer() {
+  var f = state.focus;
+  f.running = false;
+  f.endTs = null;
+  f.remainingSec = f.durationSec;
+  save();
+  render();
+}
+
+function setFocusDuration(minutes) {
+  var f = state.focus;
+  if (f.running || f.remainingSec !== f.durationSec) return; // only while fresh, before starting
+  f.durationSec = Math.round(minutes * 60);
+  f.remainingSec = f.durationSec;
+  save();
+  render();
+}
+
+function setFocusTask(taskId) {
+  state.focus.taskId = taskId || null;
+  save();
+}
+
+function tickFocusTimer() {
+  var f = state.focus;
+  if (!f.running) return;
+  var remaining = Math.max(0, Math.round((f.endTs - Date.now()) / 1000));
+  f.remainingSec = remaining;
+  if (remaining <= 0) {
+    completeFocusSession();
+  } else {
+    save();
+    if (view.tab === "focus") render();
+  }
+}
+
+function completeFocusSession(silent) {
+  var f = state.focus;
+  var minutes = Math.round((f.durationSec / 60) * 10) / 10;
+  var task = f.taskId ? state.todos.filter(function(t){ return t.id === f.taskId; })[0] : null;
+  state.focusSessions.push({
+    id: uid(), date: todayStr(), minutes: minutes,
+    taskId: f.taskId || null, taskText: task ? task.text : null,
+    endedAt: Date.now()
+  });
+
+  var dayRec = habitsForDate(todayStr());
+  var pts = 0;
+  if (!dayRec.pomodoro) {
+    dayRec.pomodoro = true;
+    pts = habitPointsFor("pomodoro");
+    recordPoints(pts, "Focus session: " + minutes + " min");
+  }
+
+  var mList = state.metrics.focus_min;
+  var d = todayStr();
+  var existingEntry = mList.filter(function(e){ return e.date === d; })[0];
+  var metricIsNew = !existingEntry;
+  if (existingEntry) { if (minutes > existingEntry.value) existingEntry.value = minutes; }
+  else mList.push({ date: d, value: minutes });
+  var cfg = pointsCfg();
+  if (metricIsNew && cfg.metricLogPoints > 0) {
+    recordPoints(cfg.metricLogPoints, "Logged metric: Longest focus span");
+  }
+
+  f.running = false;
+  f.endTs = null;
+  f.remainingSec = f.durationSec;
+  save();
+
+  if (!silent) {
+    showToast("Focus session complete" + (pts > 0 ? " — +" + pts + " pts" : ""));
+    if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
+    if (view.tab === "focus") render();
+  }
+}
+
+function initFocusTimer() {
+  setInterval(function(){ tickFocusTimer(); }, 1000);
+}
+
+function renderFocus() {
+  var frag = document.createDocumentFragment();
+  var f = state.focus;
+  var fresh = !f.running && f.remainingSec === f.durationSec;
+  var openTasks = state.todos.filter(function(t){ return !t.done; });
+  var linkedTask = f.taskId ? state.todos.filter(function(t){ return t.id === f.taskId; })[0] : null;
+
+  var card = el("div", { class: "card" }, [
+    el("h2", {}, [text("Focus session")])
+  ]);
+
+  if (fresh) {
+    card.appendChild(el("label", { class: "field-label" }, [text("Duration")]));
+    var presetGrid = el("div", { class: "metric-select-grid" }, FOCUS_PRESETS.map(function(mins){
+      return el("button", {
+        class: "metric-pick" + (Math.round(f.durationSec / 60) === mins ? " active" : ""),
+        type: "button",
+        onclick: function(){ setFocusDuration(mins); }
+      }, [text(mins + " min")]);
+    }));
+    card.appendChild(presetGrid);
+
+    var customInput = el("input", { type: "number", min: "1", step: "1", value: String(Math.round(f.durationSec / 60)) });
+    customInput.addEventListener("change", function(){
+      var v = parseInt(customInput.value, 10);
+      if (!isNaN(v) && v > 0) setFocusDuration(v);
+    });
+    card.appendChild(el("label", { class: "field-label" }, [text("Custom (min)")]));
+    card.appendChild(customInput);
+
+    card.appendChild(el("label", { class: "field-label" }, [text("Link to a task (optional)")]));
+    var select = el("select", {}, [el("option", { value: "" }, [text("No task")])]);
+    openTasks.forEach(function(t){
+      var opt = el("option", { value: t.id }, [text(t.text)]);
+      if (t.id === f.taskId) opt.setAttribute("selected", "selected");
+      select.appendChild(opt);
+    });
+    select.addEventListener("change", function(){ setFocusTask(select.value); });
+    card.appendChild(select);
+  }
+
+  var clockWrap = el("div", { class: "focus-clock-wrap" }, [
+    el("div", { class: "focus-clock" }, [text(fmtClock(f.remainingSec))])
+  ]);
+  if (linkedTask) clockWrap.appendChild(el("div", { class: "focus-task-label" }, [text("On: " + linkedTask.text)]));
+  card.appendChild(clockWrap);
+
+  var elapsedFrac = f.durationSec > 0 ? Math.min(1, Math.max(0, 1 - f.remainingSec / f.durationSec)) : 0;
+  card.appendChild(el("div", { class: "progress-track", style: "margin-top:10px" }, [
+    el("div", { class: "progress-fill", style: "width:" + Math.round(elapsedFrac * 100) + "%" })
+  ]));
+
+  var btnRow = el("div", { class: "focus-btn-row" });
+  if (fresh) {
+    var startBtn = el("button", { class: "btn", type: "button" }, [text("Start focus")]);
+    startBtn.addEventListener("click", startFocusTimer);
+    btnRow.appendChild(startBtn);
+  } else if (f.running) {
+    var pauseBtn = el("button", { class: "btn secondary", type: "button" }, [text("Pause")]);
+    pauseBtn.addEventListener("click", pauseFocusTimer);
+    var endBtn = el("button", { class: "btn secondary", type: "button" }, [text("End session")]);
+    endBtn.addEventListener("click", resetFocusTimer);
+    btnRow.appendChild(pauseBtn);
+    btnRow.appendChild(endBtn);
+  } else {
+    var resumeBtn = el("button", { class: "btn", type: "button" }, [text("Resume")]);
+    resumeBtn.addEventListener("click", startFocusTimer);
+    var resetBtn = el("button", { class: "btn secondary", type: "button" }, [text("Reset")]);
+    resetBtn.addEventListener("click", resetFocusTimer);
+    btnRow.appendChild(resumeBtn);
+    btnRow.appendChild(resetBtn);
+  }
+  card.appendChild(btnRow);
+  frag.appendChild(card);
+
+  var todaySessions = focusSessionsToday();
+  var totalMin = todaySessions.reduce(function(sum, s){ return sum + s.minutes; }, 0);
+  var statsCard = el("div", { class: "card" }, [
+    el("div", { class: "stat-grid" }, [
+      el("div", { class: "stat" }, [
+        el("div", { class: "label" }, [text("Sessions today")]),
+        el("div", { class: "value" }, [text(String(todaySessions.length))])
+      ]),
+      el("div", { class: "stat" }, [
+        el("div", { class: "label" }, [text("Minutes today")]),
+        el("div", { class: "value" }, [text(String(Math.round(totalMin * 10) / 10))])
+      ])
+    ])
+  ]);
+  frag.appendChild(statsCard);
+
+  if (todaySessions.length) {
+    var logCard = el("div", { class: "card" }, [el("h2", {}, [text("Today's sessions")])]);
+    var logList = el("div", { class: "log-list" });
+    todaySessions.slice().reverse().forEach(function(s){
+      var row = el("div", { class: "log-entry" }, [
+        el("div", {}, [
+          el("div", { class: "v" }, [text(s.minutes + " min" + (s.taskText ? " — " + s.taskText : ""))]),
+          el("div", { class: "d" }, [text(new Date(s.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))])
+        ]),
+        el("button", {
+          class: "del", "aria-label": "Delete session",
+          onclick: function(){
+            state.focusSessions = state.focusSessions.filter(function(x){ return x !== s; });
+            save(); render();
+          }
+        }, [text("×")])
+      ]);
+      logList.appendChild(row);
+    });
+    logCard.appendChild(logList);
+    frag.appendChild(logCard);
+  }
+
+  return frag;
+}
+
 function renderResources() {
   var frag = document.createDocumentFragment();
 
@@ -2236,6 +2494,7 @@ function tabIndexOf(id) {
 function contentForTab(tabId) {
   if (tabId === "today") return renderToday();
   if (tabId === "todo") return renderTodo();
+  if (tabId === "focus") return renderFocus();
   if (tabId === "phases") return renderPhases();
   if (tabId === "metrics") return renderMetrics();
   if (tabId === "progress") return renderProgress();
@@ -2504,6 +2763,7 @@ render();
 initSync();
 initSwipeNav();
 initBgVideo();
+initFocusTimer();
 fitContentMinHeight();
 
 })();
