@@ -919,7 +919,7 @@ var state = {
   missions: [],
   rewards: [],
   todos: [],
-  focus: null,
+  focus: { durationSec: 25 * 60, remainingSec: 25 * 60, running: false, endTs: null, taskId: null },
   focusSessions: []
 };
 
@@ -1091,9 +1091,9 @@ function initFirebaseSync() {
       }
       subscribeDb();
       setSyncStatus("online");
-    }).catch(function(){ setSyncStatus("error"); });
+    }).catch(function(e){ setSyncStatus("error", describeErr(e)); });
   } catch (e) {
-    setSyncStatus("offline");
+    setSyncStatus("error", describeErr(e));
   }
 }
 
@@ -1108,11 +1108,19 @@ var dbWriteInProgress = false;
 var dbWritePending = false;
 var applyingRemote = false;
 
-function setSyncStatus(status) {
+function describeErr(e) {
+  if (!e) return "";
+  try { console.error("Sync problem:", e); } catch (x) {}
+  var code = e.code ? String(e.code) : "";
+  var msg = e.message ? String(e.message) : String(e);
+  return (code || msg).slice(0, 80);
+}
+
+function setSyncStatus(status, detail) {
   var elm = document.getElementById("syncStatus");
   if (!elm) return;
   if (status === "online") { elm.textContent = "● Synced online"; elm.style.color = "var(--success)"; }
-  else if (status === "error") { elm.textContent = "● Sync error — saving locally"; elm.style.color = "var(--coral)"; }
+  else if (status === "error") { elm.textContent = "● Sync error — saving locally" + (detail ? " (" + detail + ")" : ""); elm.style.color = "var(--coral)"; }
   else { elm.textContent = "● Local only"; elm.style.color = "var(--text-muted)"; }
 }
 
@@ -1131,9 +1139,9 @@ function flushDbSave() {
     dbWriteInProgress = false;
     setSyncStatus("online");
     if (dbWritePending) { dbWritePending = false; flushDbSave(); }
-  }).catch(function(){
+  }).catch(function(e){
     dbWriteInProgress = false;
-    setSyncStatus("error");
+    setSyncStatus("error", describeErr(e));
     if (dbWritePending) { dbWritePending = false; flushDbSave(); }
   });
 }
@@ -1148,8 +1156,8 @@ function subscribeDb() {
     applyingRemote = false;
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
     render();
-  }, function(){
-    setSyncStatus("error");
+  }, function(e){
+    setSyncStatus("error", describeErr(e));
   });
 }
 
